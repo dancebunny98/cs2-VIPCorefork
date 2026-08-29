@@ -7,11 +7,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.342" />
-  </ItemGroup>
-  <ItemGroup>
+    <!-- Ссылка на VipCoreApi.dll (два уровня вверх → папка VIPCore) -->
+    <Reference Include="RanksApi.dll">
+      <HintPath>..\RanksApi.dll</HintPath>
+    </Reference>
+    <!-- Ссылка на VipCoreApi.dll (два уровня вверх → папка VIPCore) -->
     <Reference Include="VipCoreApi">
-      <HintPath>..\..\..\VipCoreApi.dll</HintPath>
+      <HintPath>..\..\VipCoreApi.dll</HintPath>
+    </Reference>
+    <!-- Ссылка на RanksApi.dll (предполагается, что лежит там же) -->
+    <Reference Include="RanksApi">
+      <HintPath>..\..\RanksApi.dll</HintPath>
     </Reference>
   </ItemGroup>
 
