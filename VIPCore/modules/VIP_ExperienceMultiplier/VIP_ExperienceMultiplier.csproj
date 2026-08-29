@@ -11,7 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="VipCoreApi">
-      <HintPath>..\..\VipCoreApi.dll</HintPath>
+      <HintPath>..\..\..\VipCoreApi.dll</HintPath>
     </Reference>
   </ItemGroup>
 
