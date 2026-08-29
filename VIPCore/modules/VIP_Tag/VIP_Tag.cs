@@ -8,15 +8,15 @@ using static VipCoreApi.IVipCoreApi;
 
 namespace VIP_Tag;
 
-public class VIPTag : BasePlugin
+public class VIP_Tag : BasePlugin
 {
     public override string ModuleAuthor => "Toil";
     public override string ModuleName => "[VIP] Tag";
     public override string ModuleVersion => "v1.0.2";
 
-    private IVipCoreApi? _api;
     private Tag _tag;
-
+    private IVipCoreApi? _api;
+    
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
     public override void OnAllPluginsLoaded(bool hotReload)
