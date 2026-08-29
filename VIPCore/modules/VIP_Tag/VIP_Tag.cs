@@ -45,7 +45,7 @@ public class Tag : VipFeatureBase
 
     private readonly UserSettings?[] _userSettings = new UserSettings?[65];
 
-    public Tag(VIPTag vipTag, IVipCoreApi api) : base(api)
+    public Tag(VIP_Tag vipTag, IVipCoreApi api) : base(api)
     {
         vipTag.RegisterListener<Listeners.OnClientConnected>(slot =>
         {
