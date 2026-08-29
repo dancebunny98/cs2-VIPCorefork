@@ -13,6 +13,9 @@
     <Reference Include="VipCoreApi">
       <HintPath>..\..\VipCoreApi.dll</HintPath>
     </Reference>
+    <Reference Include="MenuManagerApi">
+      <HintPath>..\..\MenuManagerApi.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
