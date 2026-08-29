@@ -76,7 +76,7 @@ public class Tag : VipFeatureBase
 
         // Use the same menu backend as VIPCore. If MenuManagerCS2/WASD is enabled
         // in VIPCore, tags are shown as real menu items instead of requiring !1/!2/!3.
-        var menu = Api.CreateMenu(GetTranslatedText("tag.MenuTitle"));
+        var menu = VipApi.CreateMenu(GetTranslatedText("tag.MenuTitle"));
 
         menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, _) =>
         {
