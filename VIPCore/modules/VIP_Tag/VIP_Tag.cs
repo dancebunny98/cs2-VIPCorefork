@@ -1,8 +1,7 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
-using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.Utils;
 using VipCoreApi;
 using static VipCoreApi.IVipCoreApi;
@@ -13,7 +12,7 @@ public class VIPTag : BasePlugin
 {
     public override string ModuleAuthor => "Toil";
     public override string ModuleName => "[VIP] Tag";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => "v1.0.2";
 
     private IVipCoreApi? _api;
     private Tag _tag;
@@ -38,7 +37,6 @@ public class VIPTag : BasePlugin
 public class UserSettings
 {
     public string Tag { get; set; } = "\0";
-    public ChatMenu Menu { get; set; } = new("Tag");
 }
 
 public class Tag : VipFeatureBase
@@ -76,25 +74,30 @@ public class Tag : VipFeatureBase
 
         var userTag = GetFeatureValue<List<string>>(player);
 
-        _userSettings[player.Index]!.Menu.MenuOptions.Clear();
-        _userSettings[player.Index]!.Menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
+        // Use the same menu backend as VIPCore. If MenuManagerCS2/WASD is enabled
+        // in VIPCore, tags are shown as real menu items instead of requiring !1/!2/!3.
+        var menu = Api.CreateMenu(GetTranslatedText("tag.MenuTitle"));
+
+        menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, _) =>
         {
             _userSettings[player.Index]!.Tag = "\0";
 
             PrintToChat(player, GetTranslatedText("tag.Off"));
             ChangeTag(controller);
         }, _userSettings[player.Index]!.Tag == "\0");
+
         foreach (var tag in userTag)
         {
-            _userSettings[player.Index]!.Menu.AddMenuOption(tag, (controller, option) =>
+            var selectedTag = tag;
+            menu.AddMenuOption(selectedTag, (controller, _) =>
             {
-                _userSettings[player.Index]!.Tag = tag;
-                PrintToChat(player, GetTranslatedText("tag.On", tag));
+                _userSettings[player.Index]!.Tag = selectedTag;
+                PrintToChat(player, GetTranslatedText("tag.On", selectedTag));
                 ChangeTag(controller);
-            }, _userSettings[player.Index]!.Tag == tag);
+            }, _userSettings[player.Index]!.Tag == selectedTag);
         }
 
-        MenuManager.OpenChatMenu(player, _userSettings[player.Index]!.Menu);
+        menu.Open(player);
     }
 
     private void ChangeTag(CCSPlayerController player)
