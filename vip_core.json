@@ -1,0 +1,17 @@
+{
+  "TimeMode": 0,
+  "ServerId": 0,
+  "UseCenterHtmlMenu": true,
+  "UseWasdMenu": true,
+  "ServerIP": "0.0.0.0",
+  "ServerPort": 27015,
+  "ReOpenMenuAfterItemClick": true,
+  "VipLogging": true,
+  "Connection": {
+    "Host": "host",
+    "Database": "database",
+    "User": "user",
+    "Password": "password",
+    "Port": 3306
+  }
+}
