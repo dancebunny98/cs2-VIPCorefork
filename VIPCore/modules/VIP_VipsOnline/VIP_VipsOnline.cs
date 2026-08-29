@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Menu;
+using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using VipCoreApi;
 
@@ -14,7 +16,7 @@ public class VIPVipsOnline : BasePlugin
 {
     public override string ModuleAuthor => "panda";
     public override string ModuleName => "[VIP] Vips Online";
-    public override string ModuleVersion => "v1.0";
+    public override string ModuleVersion => "v1.0.1";
     private IVipCoreApi? _api;
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
@@ -33,23 +35,46 @@ public class VIPVipsOnline : BasePlugin
 
         var onlineVips = Utilities.GetPlayers().Where(p => p.IsValid && _api.IsClientVip(p)).Select(p => $"{p.PlayerName}").ToList();
 
-        string message;
         var vipList = string.Join(", ", onlineVips);
 
-        if (onlineVips.Count != 0)
-            message = ReplaceColorPlaceholders(string.Format(Localizer["vip.OnlineVips"], vipList));
-        else
-            message = ReplaceColorPlaceholders(string.Format(Localizer["vip.NoVipsOnline"]));
-
-        if (player != null)
-            _api.PrintToChat(player, message);
-        else
+        // Console/RCON still receives a readable text response.
+        if (player == null)
         {
             if (onlineVips.Count != 0)
                 Console.WriteLine($"VIP players online: {vipList}.");
             else
-                Console.WriteLine($"No VIP players online.");
+                Console.WriteLine("No VIP players online.");
+            return;
         }
+
+        // In-game !vips opens a real menu instead of printing the localization
+        // template to chat. The same menu backend as VIPCore is used, so when
+        // WASD/MenuManager is enabled it is a ButtonMenu.
+        var menu = _api.CreateMenu(ReplaceColorPlaceholders(Localizer["vip.MenuTitle"]));
+
+        if (onlineVips.Count == 0)
+        {
+            menu.AddMenuOption(
+                ReplaceColorPlaceholders(Localizer["vip.NoVipsOnline"]),
+                (_, _) => { },
+                true);
+        }
+        else
+        {
+            foreach (var vipName in onlineVips)
+            {
+                menu.AddMenuOption(vipName, (_, _) => { }, true);
+            }
+        }
+
+        menu.Open(player);
+
+        // Do not leave the informational menu hanging on the screen.
+        AddTimer(5.0f, () =>
+        {
+            if (player.IsValid)
+                MenuManager.CloseActiveMenu(player);
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private readonly Dictionary<string, char> _colorMap = new()
