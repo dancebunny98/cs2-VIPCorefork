@@ -27,40 +27,42 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # 1. Собираем сначала VIPCore и VipCoreApi (они не зависят от модулей)
-      - name: Build Core and API
+      # Собираем всё решение (ядро, API и модули) вместе
+      - name: Restore and build all
         run: |
           dotnet restore VIPCore/VIPCore.sln
           dotnet build VIPCore/VIPCore.sln -c ${{ env.CONFIGURATION }} --no-restore
 
-      # 2. Публикуем ядро (со всеми зависимостями) для артефакта
+      # Публикуем ядро (со всеми зависимостями) – для артефакта
       - name: Publish VIPCore
         run: |
           dotnet publish VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} -o publish/VIPCore --no-build
           cp -r VIPCore/VIPCore/lang publish/VIPCore/
 
-      # 3. Собираем каждый модуль отдельно, игнорируя ошибки (но фиксируем их)
-      - name: Build modules (continue on error)
-        continue-on-error: true   # <-- сборка не прервётся, если один модуль упадёт
+      # Копируем только сами модули (DLL + PDB) без зависимостей
+      - name: Collect module binaries
         run: |
-          set -e
           mkdir -p publish/modules
           for proj in VIPCore/modules/*/*.csproj; do
             name=$(basename "$(dirname "$proj")")
-            echo "== Building $name =="
-            # Восстанавливаем зависимости модуля (они могут ссылаться на VipCoreApi)
-            dotnet restore "$proj" || true
-            # Собираем модуль. Если ошибка – записываем в лог и переходим к следующему.
-            if dotnet build "$proj" -c ${{ env.CONFIGURATION }} --no-restore; then
-              echo "✅ $name built successfully"
-              # Публикуем модуль со всеми его зависимостями
-              dotnet publish "$proj" -c ${{ env.CONFIGURATION }} -o "publish/modules/$name" --no-build
+            echo "== Copying $name =="
+            BIN="$(dirname "$proj")/bin/${{ env.CONFIGURATION }}/net8.0"
+            if [ -d "$BIN" ]; then
+              mkdir -p "publish/modules/$name"
+              # Копируем только саму DLL модуля и PDB (если есть)
+              cp "$BIN/$name.dll" "publish/modules/$name/" 2>/dev/null || echo "::warning::$name.dll not found"
+              cp "$BIN/$name.pdb" "publish/modules/$name/" 2>/dev/null || true
+              # Если у модуля есть свои дополнительные ресурсы (например, lang) – копируем их отдельно
+              if [ -d "$(dirname "$proj")/lang" ]; then
+                cp -r "$(dirname "$proj")/lang" "publish/modules/$name/"
+              fi
             else
-              echo "❌ $name failed to build, skipping"
+              echo "::warning::no build output for $name at $BIN"
             fi
           done
+          find publish -type f
 
-      # 4. Артефакт с ядром
+      # Артефакт для ядра
       - name: Upload VIPCore artifact
         uses: actions/upload-artifact@v4
         with:
@@ -68,7 +70,7 @@ jobs:
           path: publish/VIPCore/
           if-no-files-found: error
 
-      # 5. Артефакт со всеми модулями (только те, что удалось собрать)
+      # Артефакт для модулей (только их DLL, без общих зависимостей)
       - name: Upload modules artifact
         uses: actions/upload-artifact@v4
         with:
