@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.342" />
+    <PackageReference Include="Dapper" Version="2.1.21" />
+    <PackageReference Include="MySqlConnector" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VipCoreApi\VipCoreApi.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Optional dependency: MenuManagerCS2 (WASD/ButtonMenu support).
+         VIPCore works fine without it (falls back to Chat/CenterHtml menu),
+         but if the plugin is present the VIP menu will be rendered as a WASD button menu. -->
+    <Reference Include="MenuManagerApi">
+      <HintPath>..\MenuManagerApi.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
