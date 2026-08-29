@@ -38,7 +38,6 @@ public class VIPTag : BasePlugin
 public class UserSettings
 {
     public string Tag { get; set; } = "\0";
-    public ChatMenu Menu { get; set; } = new("Tag");
 }
 
 public class Tag : VipFeatureBase
@@ -76,8 +75,11 @@ public class Tag : VipFeatureBase
 
         var userTag = GetFeatureValue<List<string>>(player);
 
-        _userSettings[player.Index]!.Menu.MenuOptions.Clear();
-        _userSettings[player.Index]!.Menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
+        // Goes through Api.CreateMenu so it respects UseWasdMenu/MenuManagerCS2,
+        // instead of always forcing the native chat (!1 !2 !3) menu.
+        var menu = CreateMenu(GetTranslatedText(Feature));
+
+        menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
         {
             _userSettings[player.Index]!.Tag = "\0";
 
@@ -86,7 +88,7 @@ public class Tag : VipFeatureBase
         }, _userSettings[player.Index]!.Tag == "\0");
         foreach (var tag in userTag)
         {
-            _userSettings[player.Index]!.Menu.AddMenuOption(tag, (controller, option) =>
+            menu.AddMenuOption(tag, (controller, option) =>
             {
                 _userSettings[player.Index]!.Tag = tag;
                 PrintToChat(player, GetTranslatedText("tag.On", tag));
@@ -94,7 +96,7 @@ public class Tag : VipFeatureBase
             }, _userSettings[player.Index]!.Tag == tag);
         }
 
-        MenuManager.OpenChatMenu(player, _userSettings[player.Index]!.Menu);
+        menu.Open(player);
     }
 
     private void ChangeTag(CCSPlayerController player)

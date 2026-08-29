@@ -229,11 +229,18 @@ public interface IVipCoreApi
     T LoadConfig<T>(string name);
 
     /// <summary>
-    /// Returns a menu depending on the UseCenterHtmlMenu parameter from the config.
+    /// Returns a menu depending on the UseCenterHtmlMenu / UseWasdMenu parameters from the config.
     /// </summary>
     /// <param name="title"></param>
     /// <returns></returns>
     IMenu CreateMenu(string title);
+
+    /// <summary>
+    /// Closes any menu currently open for the player (works for both the native
+    /// Chat/CenterHtml menu and the MenuManagerCS2 WASD menu, whichever CreateMenu used).
+    /// </summary>
+    /// <param name="player"></param>
+    void CloseMenu(CCSPlayerController player);
 
     
     /// <summary>

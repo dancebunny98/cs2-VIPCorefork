@@ -1,0 +1,249 @@
+name: Build VIPCore
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'VIPCore/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  CONFIGURATION: Release
+
+jobs:
+  # ---------------------------------------------------------------
+  # 1) VipCoreApi - shared interface library, built on its own first
+  # ---------------------------------------------------------------
+  build-vipcoreapi:
+    name: Build VipCoreApi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore VIPCore/VipCoreApi/VipCoreApi.csproj
+
+      - name: Build
+        run: dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Collect output
+        run: |
+          set -e
+          OUT=out/VipCoreApi
+          mkdir -p "$OUT"
+          BIN="VIPCore/VipCoreApi/bin/${{ env.CONFIGURATION }}/net8.0"
+          cp "$BIN"/VipCoreApi.dll "$OUT"/
+          [ -f "$BIN/VipCoreApi.pdb" ] && cp "$BIN"/VipCoreApi.pdb "$OUT"/ || true
+          find out -type f
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VipCoreApi-${{ github.sha }}
+          path: out/VipCoreApi
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------
+  # 2) VIPCore - the core plugin itself
+  # ---------------------------------------------------------------
+  build-vipcore:
+    name: Build VIPCore
+    runs-on: ubuntu-latest
+    needs: build-vipcoreapi
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore VIPCore/VIPCore/VIPCore.csproj
+
+      - name: Build
+        run: dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Collect output
+        run: |
+          set -e
+          OUT=out/addons/counterstrikesharp/plugins/VIPCore
+          mkdir -p "$OUT"
+          BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
+
+          cp "$BIN"/VIPCore.dll "$OUT"/
+          [ -f "$BIN/VIPCore.pdb" ] && cp "$BIN"/VIPCore.pdb "$OUT"/ || true
+
+          for dep in VipCoreApi.dll MenuManagerApi.dll Dapper.dll MySqlConnector.dll; do
+            if [ -f "$BIN/$dep" ]; then
+              cp "$BIN/$dep" "$OUT"/
+            else
+              echo "::warning::$dep not found in VIPCore build output, skipping"
+            fi
+          done
+
+          cp -r VIPCore/VIPCore/lang "$OUT"/
+          find out -type f
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VIPCore-${{ github.sha }}
+          path: out/
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------
+  # 3) Every VIP_* module, built and packaged INDIVIDUALLY.
+  #    One module failing (e.g. a missing external dependency) does
+  #    NOT stop the others - it's reported as a warning instead.
+  # ---------------------------------------------------------------
+  build-modules:
+    name: Build ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    needs: build-vipcoreapi
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - VIP_AntiFlash
+          - VIP_Armor
+          - VIP_Bhop
+          - VIP_BuyTeamWeapon
+          - VIP_CustomDefaultAmmo
+          - VIP_DamageChange
+          - VIP_DecoyTeleport
+          - VIP_DefuseKit
+          - VIP_Defuser
+          - VIP_Endurance
+          - VIP_FastDefuse
+          - VIP_FastPlant
+          - VIP_FastReload
+          - VIP_Flags
+          - VIP_Fov
+          - VIP_Gifts
+          - VIP_Gravity
+          - VIP_Grenades
+          - VIP_GunsPack
+          - VIP_Health
+          - VIP_Healthshot
+          - VIP_InfiniteAmmo
+          - VIP_Items
+          - VIP_Jumps
+          - VIP_KillScreen
+          - VIP_Money
+          - VIP_NightVip
+          - VIP_NoFallDamage
+          - VIP_RainbowModel
+          - VIP_Random
+          - VIP_RegenArmor
+          - VIP_RegenHealth
+          - VIP_ResetDeaths
+          - VIP_Respawn
+          - VIP_ShowDamage
+          - VIP_SmokeColor
+          - VIP_Speed
+          - VIP_Tag
+          - VIP_TeammatesHeal
+          - VIP_Test
+          - VIP_Vampirism
+          - VIP_VipsOnline
+          - VIP_WeaponsMenu
+          - VIP_Zeus
+                  # VIP_ExperienceMultiplier is intentionally excluded - it needs an
+          # external RanksApi.dll (github.com/NickFox007/CS2-RanksApi or similar)
+          # that isn't part of this repo. See job below.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore & build
+        id: build
+        continue-on-error: true
+        run: |
+          set -e
+          PROJ="VIPCore/modules/${{ matrix.module }}/${{ matrix.module }}.csproj"
+          if [ ! -f "$PROJ" ]; then
+            echo "::warning::$PROJ not found, skipping"
+            exit 0
+          fi
+          dotnet restore "$PROJ"
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Collect output
+        if: steps.build.outcome == 'success'
+        run: |
+          set -e
+          MOD="${{ matrix.module }}"
+          PROJDIR="VIPCore/modules/$MOD"
+          OUT="out/addons/counterstrikesharp/plugins/$MOD"
+          mkdir -p "$OUT"
+
+          # Output path is not always PROJDIR/bin/Release/net8.0 - some modules
+          # (e.g. VIP_DefuseKit) override <OutputPath> in their .csproj. Find the
+          # dll wherever it actually landed instead of assuming a fixed path.
+          DLL=$(find "$PROJDIR" -path '*/obj/*' -prune -o -name "$MOD.dll" -print | head -n1)
+
+          if [ -z "$DLL" ]; then
+            echo "::warning::could not locate $MOD.dll after a successful build"
+            exit 0
+          fi
+
+          BIN=$(dirname "$DLL")
+          find "$BIN" -maxdepth 1 -name "*.dll" -exec cp {} "$OUT"/ \;
+          find "$BIN" -maxdepth 1 -name "*.pdb" -exec cp {} "$OUT"/ \;
+
+          # Per-module translations, if the module ships its own lang/ folder
+          if [ -d "$PROJDIR/lang" ]; then
+            mkdir -p "$OUT/lang"
+            cp "$PROJDIR"/lang/*.json "$OUT/lang"/ 2>/dev/null || true
+          fi
+
+          find out -type f
+
+      - name: Report failure
+        if: steps.build.outcome == 'failure'
+        run: echo "::warning::${{ matrix.module }} failed to build - see the 'Restore & build' step log above"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.build.outcome == 'success'
+        with:
+          name: ${{ matrix.module }}-${{ github.sha }}
+          path: out/
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------
+  # 4) VIP_ExperienceMultiplier - kept separate and always allowed to
+  #    fail, since it depends on the external RanksApi plugin which
+  #    isn't part of this repository (add its .csproj/dll yourself
+  #    under VIPCore/modules/VIP_ExperienceMultiplier if you have it).
+  # ---------------------------------------------------------------
+  build-experience-multiplier:
+    name: Build VIP_ExperienceMultiplier (optional, needs RanksApi)
+    runs-on: ubuntu-latest
+    needs: build-vipcoreapi
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore & build
+        run: |
+          PROJ="VIPCore/modules/VIP_ExperienceMultiplier/VIP_ExperienceMultiplier.csproj"
+          if [ ! -f "$PROJ" ]; then
+            echo "::warning::$PROJ not found, skipping"
+            exit 0
+          fi
+          dotnet restore "$PROJ" || true
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore

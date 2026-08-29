@@ -33,24 +33,41 @@ public class VIPVipsOnline : BasePlugin
 
         var onlineVips = Utilities.GetPlayers().Where(p => p.IsValid && _api.IsClientVip(p)).Select(p => $"{p.PlayerName}").ToList();
 
-        string message;
-        var vipList = string.Join(", ", onlineVips);
-
-        if (onlineVips.Count != 0)
-            message = ReplaceColorPlaceholders(string.Format(Localizer["vip.OnlineVips"], vipList));
-        else
-            message = ReplaceColorPlaceholders(string.Format(Localizer["vip.NoVipsOnline"]));
-
-        if (player != null)
-            _api.PrintToChat(player, message);
-        else
+        if (player == null)
         {
             if (onlineVips.Count != 0)
-                Console.WriteLine($"VIP players online: {vipList}.");
+                Console.WriteLine($"VIP players online: {string.Join(", ", onlineVips)}.");
             else
-                Console.WriteLine($"No VIP players online.");
+                Console.WriteLine("No VIP players online.");
+            return;
         }
+
+        // Show the list in a menu (WASD/CenterHtml/Chat depending on core config)
+        // instead of printing it to chat, and auto-close it after a few seconds.
+        // Menu text is rendered as HTML/plain UI, not chat, so the [color] chat
+        // placeholders are stripped instead of converted to chat color codes.
+        var menu = _api.CreateMenu(StripColorPlaceholders(Localizer["vip.OnlineVips.Title"]));
+        menu.ExitButton = true;
+
+        if (onlineVips.Count != 0)
+        {
+            foreach (var name in onlineVips)
+            {
+                // Disabled = display-only entry, not something to "select".
+                menu.AddMenuOption(name, (_, _) => { }, true);
+            }
+        }
+        else
+        {
+            menu.AddMenuOption(StripColorPlaceholders(Localizer["vip.NoVipsOnline"]), (_, _) => { }, true);
+        }
+
+        menu.Open(player);
+
+        AddTimer(AutoCloseSeconds, () => _api.CloseMenu(player));
     }
+
+    private const float AutoCloseSeconds = 6.0f;
 
     private readonly Dictionary<string, char> _colorMap = new()
     {
@@ -82,6 +99,15 @@ public class VIPVipsOnline : BasePlugin
         foreach (var colorPlaceholder in _colorMap)
         {
             message = message.Replace(colorPlaceholder.Key, colorPlaceholder.Value.ToString());
+        }
+        return message;
+    }
+
+    private string StripColorPlaceholders(string message)
+    {
+        foreach (var colorPlaceholder in _colorMap.Keys)
+        {
+            message = message.Replace(colorPlaceholder, "");
         }
         return message;
     }

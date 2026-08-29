@@ -397,6 +397,17 @@ public class VipCoreApi : IVipCoreApi
         return _vipCore.CoreConfig.UseCenterHtmlMenu ? new CenterHtmlMenu(title, _vipCore) : new ChatMenu(title);
     }
 
+    public void CloseMenu(CCSPlayerController player)
+    {
+        if (_vipCore.CoreConfig.UseWasdMenu && _vipCore.MenuApi != null)
+        {
+            _vipCore.MenuApi.CloseMenu(player);
+            return;
+        }
+
+        MenuManager.CloseActiveMenu(player);
+    }
+
     public void SetPlayerCookie<T>(ulong steamId64, string key, T value)
     {
         if (!_playersCookie.TryGetValue(steamId64, out var cookie))
