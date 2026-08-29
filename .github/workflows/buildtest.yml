@@ -16,10 +16,8 @@ env:
   CONFIGURATION: Release
 
 jobs:
-  build-core:
-    name: Build VIPCore core
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,168 +26,58 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      # Добавляем все проекты модулей в решение VIPCore.sln,
+      # чтобы они собирались вместе с ядром и API.
+      - name: Add modules to solution
+        run: |
+          for proj in VIPCore/modules/*/*.csproj; do
+            dotnet sln VIPCore/VIPCore.sln add "$proj" || true
+          done
 
       - name: Restore
         run: dotnet restore VIPCore/VIPCore.sln
 
-      - name: Build VipCoreApi
-        run: dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore
+      - name: Build all projects (core, api, modules)
+        run: dotnet build VIPCore/VIPCore.sln -c ${{ env.CONFIGURATION }} --no-restore
 
-      - name: Build VIPCore
-        run: dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
+      # Публикуем основной плагин VIPCore со всеми зависимостями.
+      - name: Publish VIPCore
+        run: |
+          dotnet publish VIPCore/VIPCore/VIPCore.csproj \
+            -c ${{ env.CONFIGURATION }} \
+            -o publish/VIPCore \
+            --no-build
+          # Копируем папку с переводами
+          cp -r VIPCore/VIPCore/lang publish/VIPCore/
 
-      - name: Package plugin folder
+      # Публикуем каждый модуль в отдельную подпапку внутри publish/modules/.
+      # --no-build гарантирует, что используются уже собранные бинарники.
+      - name: Publish modules
         run: |
           set -e
-
-          OUT=package/addons/counterstrikesharp/plugins/VIPCore
-          mkdir -p "$OUT"
-
-          BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
-
-          # Main plugin dll + pdb
-          cp "$BIN"/VIPCore.dll "$OUT"/
-          [ -f "$BIN/VIPCore.pdb" ] && cp "$BIN"/VIPCore.pdb "$OUT"/ || true
-
-          # Dependencies that must ship alongside the plugin
-          for dep in VipCoreApi.dll MenuManagerApi.dll Dapper.dll MySqlConnector.dll; do
-            if [ -f "$BIN/$dep" ]; then
-              cp "$BIN/$dep" "$OUT"/
-            else
-              echo "::warning::$dep not found in build output, skipping"
-            fi
-          done
-
-          # Translations
-          cp -r VIPCore/VIPCore/lang "$OUT"/
-
-          echo "Packaged files:"
-          find package -type f
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: VIPCore-${{ github.sha }}
-          path: package/
-          if-no-files-found: error
-
-
-  build-modules:
-    name: Build VIP_* modules
-    runs-on: ubuntu-latest
-    needs: build-core
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Download VIPCore build outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: VIPCore-${{ github.sha }}
-          path: core-artifact
-
-      - name: Prepare VipCoreApi for module builds
-        run: |
-          set -e
-
-          API_DLL="core-artifact/addons/counterstrikesharp/plugins/VIPCore/VipCoreApi.dll"
-
-          test -f "$API_DLL"
-
-          cp "$API_DLL" VIPCore/VipCoreApi.dll
-
-          echo "Using VipCoreApi built by the VIPCore job:"
-          ls -lh VIPCore/VipCoreApi.dll
-
-      - name: Build every module
-        run: |
-          mkdir -p package
-
-          failed=0
-          built=0
-          skipped=0
-
+          mkdir -p publish/modules
           for proj in VIPCore/modules/*/*.csproj; do
             name=$(basename "$(dirname "$proj")")
-
-            echo ""
-            echo "========================================"
-            echo "== Building $name =="
-            echo "========================================"
-
-            # Restore
-            if ! dotnet restore "$proj"; then
-              echo "::error::Restore failed for $name, skipping module"
-              failed=1
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            # Build
-            if ! dotnet build \
-                "$proj" \
-                -c ${{ env.CONFIGURATION }} \
-                --no-restore; then
-
-              echo "::error::Build failed for $name, skipping module"
-              failed=1
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            # Package successfully built module
-            OUT="package/addons/counterstrikesharp/plugins/$name"
-            mkdir -p "$OUT"
-
-            BIN="$(dirname "$proj")/bin/${{ env.CONFIGURATION }}/net8.0"
-
-            if [ -d "$BIN" ]; then
-              find "$BIN" \
-                -maxdepth 1 \
-                -name "*.dll" \
-                -exec cp {} "$OUT"/ \;
-
-              find "$BIN" \
-                -maxdepth 1 \
-                -name "*.pdb" \
-                -exec cp {} "$OUT"/ \;
-
-              echo "== $name built successfully =="
-
-              built=$((built + 1))
-            else
-              echo "::warning::No build output for $name at $BIN"
-              failed=1
-              skipped=$((skipped + 1))
-              continue
-            fi
+            echo "Publishing module $name"
+            dotnet publish "$proj" \
+              -c ${{ env.CONFIGURATION }} \
+              -o "publish/modules/$name" \
+              --no-build
           done
 
-          echo ""
-          echo "========================================"
-          echo "== Module build summary =="
-          echo "========================================"
-          echo "Successfully built: $built"
-          echo "Skipped/failed:     $skipped"
-          echo "========================================"
-
-          echo ""
-          echo "Packaged files:"
-          find package -type f
-
-          # Important:
-          # Do not fail the entire workflow when individual modules fail.
-          exit 0
-
-      - name: Upload artifact
+      # Артефакт для ядра
+      - name: Upload VIPCore artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VIPCore-modules-${{ github.sha }}
-          path: package/
+          name: VIPCore
+          path: publish/VIPCore/
+          if-no-files-found: error
+
+      # Артефакт, содержащий все модули (каждый в своей папке)
+      - name: Upload modules artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIPCore-Modules
+          path: publish/modules/
           if-no-files-found: warn
