@@ -405,7 +405,10 @@ public class VipCoreApi : IVipCoreApi
             return;
         }
 
-        MenuManager.CloseActiveMenu(player);
+        // Fully-qualified because `using MenuManager;` (MenuManagerCS2's namespace)
+        // and `CounterStrikeSharp.API.Modules.Menu.MenuManager` (the static class)
+        // share the same name "MenuManager" and would otherwise be ambiguous.
+        CounterStrikeSharp.API.Modules.Menu.MenuManager.CloseActiveMenu(player);
     }
 
     public void SetPlayerCookie<T>(ulong steamId64, string key, T value)
