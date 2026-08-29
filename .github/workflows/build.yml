@@ -1,4 +1,4 @@
-name: Build VIPCore
+name: Build
 
 on:
   push:
@@ -155,7 +155,7 @@ jobs:
           - VIP_VipsOnline
           - VIP_WeaponsMenu
           - VIP_Zeus
-                  # VIP_ExperienceMultiplier is intentionally excluded - it needs an
+          # VIP_ExperienceMultiplier is intentionally excluded - it needs an
           # external RanksApi.dll (github.com/NickFox007/CS2-RanksApi or similar)
           # that isn't part of this repo. See job below.
     steps:
