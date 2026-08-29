@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;

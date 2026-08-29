@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
