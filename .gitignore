@@ -11,7 +11,11 @@
 # `dotnet build`. That folder is a build artifact, not source - never commit it,
 # or people who download the repo end up deploying stale DLLs instead of a
 # fresh build. (See VIPCore/modules/*/build/ - previously committed by mistake.)
-**/build/
+# README.md inside build/ is kept intentionally as documentation - everything
+# else under build/ (DLLs, pdbs, addons/...) stays ignored.
+**/build/*
+!**/build/README.md
+!**/build/readme.md
 
 VIPCore/ignoremodules/
 VIPCore/privatemodules/
