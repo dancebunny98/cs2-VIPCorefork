@@ -13,15 +13,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VipCoreApi\VipCoreApi.csproj" />
+    <ProjectReference Include="..\VipCoreApi\VipCoreApi.csproj">
+      <!-- VipCoreApi.dll резолвится из shared/VipCoreApi/ на сервере -
+           не копировать локальную копию в папку плагина, иначе будет
+           конфликт типов (два разных VipCoreApi.dll в разных AssemblyLoadContext). -->
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
     <!-- Optional dependency: MenuManagerCS2 (WASD/ButtonMenu support).
          VIPCore works fine without it (falls back to Chat/CenterHtml menu),
-         but if the plugin is present the VIP menu will be rendered as a WASD button menu. -->
+         but if the plugin is present the VIP menu will be rendered as a WASD button menu.
+         Private=false: MenuManagerApi.dll must come from shared/MenuManagerApi/ at runtime,
+         not a private copy in plugins/VIPCore/ - two separate copies would be two different
+         CLR types across AssemblyLoadContexts and break the capability cast to MenuManagerCore. -->
     <Reference Include="MenuManagerApi">
       <HintPath>..\MenuManagerApi.dll</HintPath>
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
 

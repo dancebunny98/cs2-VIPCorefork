@@ -208,8 +208,11 @@ public class VipCore : BasePlugin
 
                 await Server.NextFrameAsync(() =>
                 {
-                    VipApi.OnPlayerLoaded(player, user.group);
+                    // IsClientVip выставляем ДО OnPlayerLoaded - если какая-то фича
+                    // в своём обработчике PlayerLoaded проверяет Api.IsClientVip(player),
+                    // она должна увидеть уже актуальное значение, а не false.
                     IsClientVip[player.Slot] = IsUserActiveVip(player);
+                    VipApi.OnPlayerLoaded(player, user.group);
 
                     AddTimer(5.0f, () => PrintToChat(player,
                         Localizer["vip.WelcomeToTheServer", user.name] + (user.expires == 0

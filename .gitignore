@@ -6,6 +6,13 @@
 **/runtimes
 **/publish
 
+# CounterStrikeSharp.API's build targets copy every project's compiled output
+# into <project>/build/addons/counterstrikesharp/plugins/<name>/ on every local
+# `dotnet build`. That folder is a build artifact, not source - never commit it,
+# or people who download the repo end up deploying stale DLLs instead of a
+# fresh build. (See VIPCore/modules/*/build/ - previously committed by mistake.)
+**/build/
+
 VIPCore/ignoremodules/
 VIPCore/privatemodules/
 VIPCore/addons/
@@ -20,7 +27,6 @@ VIPCore/modules/VIP_Hook/VIP_Hook.csproj
 
 VIPCore/modules/VIP_Tracers/VIP_Tracers.cs
 VIPCore/modules/VIP_Tracers/VIP_Tracers.csproj
-VIPCore/modules/VIP_Money/build/addons/counterstrikesharp/plugins/ModularityPlugin/plugins/VIP_Money/VIP_Money.deps.json
 
 VIPCore/modules/VIP_TestM/VIP_TestM.csproj
 VIPCore/modules/VIP_TestM/Class1.cs

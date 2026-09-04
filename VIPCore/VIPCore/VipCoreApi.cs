@@ -196,22 +196,26 @@ public class VipCoreApi : IVipCoreApi
         var accountId = authSteamId.AccountId;
         var steamId64 = authSteamId.SteamId64;
 
+        // Обновляем данные в памяти СИНХРОННО (как в GiveClientVip/UpdateClientVip),
+        // чтобы OnPlayerLoaded ниже увидел актуального user в _vipCore.Users - иначе
+        // фичи (VIP_Tag, VIP_Fov и т.д.), подписанные на это событие, не применят VIP
+        // сразу же (см. подробный комментарий в GiveClientVip).
+        var user = _vipCore.CreateNewUser(accountId, name, group, time);
+        _vipCore.Users[steamId64] = user;
+        _vipCore.SetClientFeature(steamId64, group);
+        _vipCore.IsClientVip[player.Slot] = true;
+
         OnPlayerLoaded(player, group);
-        Task.Run(() => SetClientVipAsync(name, accountId, group, time, steamId64));
+
+        // Запись в БД - в фоне, применение фич игроку это не блокирует.
+        Task.Run(() => SetClientVipAsync(user));
     }
 
-    private async Task SetClientVipAsync(string name, int accountId, string group, int time,
-        ulong steamId64)
+    private async Task SetClientVipAsync(User user)
     {
         try
         {
-            var user = _vipCore.CreateNewUser(accountId, name, group, time);
             await _vipCore.Database.UpdateUserInDb(user);
-
-            if (_vipCore.Users.ContainsKey(steamId64))
-            {
-                _vipCore.Users[steamId64] = user;
-            }
         }
         catch (Exception e)
         {
@@ -246,12 +250,17 @@ public class VipCoreApi : IVipCoreApi
         var accountId = authSteamId.AccountId;
         var steamId64 = authSteamId.SteamId64;
 
-        OnPlayerLoaded(player, group);
-
         var user = _vipCore.CreateNewUser(accountId, name, group, time);
         _vipCore.Users.TryAdd(steamId64, user);
         _vipCore.SetClientFeature(steamId64, group);
         _vipCore.IsClientVip[player.Slot] = true;
+
+        // ВАЖНО: OnPlayerLoaded должен вызываться ПОСЛЕ того, как Users/FeatureState/IsClientVip
+        // уже обновлены. Фичи (VIP_Tag, VIP_Fov и т.д.) подписаны на PlayerLoaded и в обработчике
+        // сразу читают PlayerHasFeature/GetFeatureValue - если вызвать событие раньше, они увидят
+        // пустые данные (PlayerHasFeature вернёт false, GetFeatureValue кинет исключение) и VIP
+        // не применится сразу, а подхватится только на следующем коннекте/спавне.
+        OnPlayerLoaded(player, group);
 
         if (!isTemporary)
         {

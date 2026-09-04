@@ -7,7 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\VipCoreApi\VipCoreApi.csproj" />
+    <ProjectReference Include="..\..\VipCoreApi\VipCoreApi.csproj">
+      <!-- VipCoreApi.dll резолвится из shared/VipCoreApi/ на сервере -
+           не копировать локальную копию в папку плагина, иначе будет
+           конфликт типов (два разных VipCoreApi.dll в разных AssemblyLoadContext). -->
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
