@@ -1,4 +1,3 @@
-﻿using System.Data;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Entities;
@@ -87,7 +86,7 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         {
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            var serverId = vipCore.CoreConfig.ServerId;
 
             var existingUser = await connection.QuerySingleOrDefaultAsync<User>(
                 @"SELECT * FROM vip_users WHERE account_id = @AccId AND sid = @sid",
@@ -108,7 +107,13 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         {
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            // ВАЖНО: используем CoreConfig.ServerId напрямую, а не отдельный поход в БД
+            // за vip_servers по ServerIp/ServerPort (как было раньше) - тот запрос мог
+            // тихо вернуть другое значение (нет строки под текущий IP, конфиг менялся,
+            // временная ошибка подключения), и тогда проверка "уже есть VIP" смотрела
+            // не туда, пропуская INSERT с уже занятым (account_id, sid) -> сырое
+            // исключение MySqlException "Duplicate entry" вместо аккуратного варнинга.
+            var serverId = vipCore.CoreConfig.ServerId;
 
             var existingUser = await connection.QuerySingleOrDefaultAsync<User>(
                 @"SELECT * FROM vip_users WHERE account_id = @AccId AND sid = @sid", new
@@ -123,9 +128,20 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
                 return;
             }
 
-            await connection.ExecuteAsync(@"
-                INSERT INTO vip_users (account_id, name, lastvisit, sid, `group`, expires)
-                VALUES (@account_id, @name, @lastvisit, @sid, @group, @expires);", user);
+            try
+            {
+                await connection.ExecuteAsync(@"
+                    INSERT INTO vip_users (account_id, name, lastvisit, sid, `group`, expires)
+                    VALUES (@account_id, @name, @lastvisit, @sid, @group, @expires);", user);
+            }
+            catch (MySqlException e) when (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
+            {
+                // Страховка на случай реальной гонки (например, команда вызвана дважды
+                // почти одновременно) - вместо необработанного исключения в лог просто
+                // пишем варнинг, поведение как при обычном "уже существует".
+                vipCore.PrintLogWarning("User already exists (race on insert): {accId}", user.account_id);
+                return;
+            }
 
             vipCore.PrintLogInfo("Player '{name} [{accId}]' has been successfully added", user.name, user.account_id);
         }
@@ -141,7 +157,7 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         {
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            var serverId = vipCore.CoreConfig.ServerId;
             var existingUser = await connection.QuerySingleOrDefaultAsync<User>(
                 @"SELECT * FROM vip_users WHERE account_id = @AccId AND sid = @sid", new
                 {
@@ -180,7 +196,7 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         {
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            var serverId = vipCore.CoreConfig.ServerId;
             var existingUser = await connection.QuerySingleOrDefaultAsync<User>(
                 @"SELECT * FROM vip_users WHERE account_id = @AccId AND sid = @sid", new
                 {
@@ -232,7 +248,7 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
 
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            var serverId = vipCore.CoreConfig.ServerId;
             await connection.ExecuteAsync(@"
             DELETE FROM vip_users
         WHERE account_id = @AccId AND sid = @sid;", new { AccId = accId, sid = serverId });
@@ -251,7 +267,7 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         {
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            var serverId = vipCore.CoreConfig.ServerId;
             var user = await connection.QueryAsync<User?>(
                 "SELECT * FROM `vip_users` WHERE `account_id` = @AccId AND sid = @sid AND (expires > @CurrTime OR expires = 0)",
                 new { AccId = accId, sid = serverId, CurrTime = DateTime.UtcNow.GetUnixEpoch() }
@@ -273,7 +289,7 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         {
             await using var connection = new MySqlConnection(dbConnectionString);
             await connection.OpenAsync();
-            var serverId = await GetServerId(connection);
+            var serverId = vipCore.CoreConfig.ServerId;
 
             var expiredUsers = await connection.QueryAsync<User>(
                 "SELECT * FROM vip_users WHERE account_id = @AccId AND sid = @sid AND expires < @CurrentTime AND expires > 0",
@@ -313,28 +329,4 @@ public class Database(VipCore vipCore, ILogger logger, string dbConnectionString
         }
     }
 
-    private async Task<long> GetServerId(IDbConnection connection)
-    {
-        try
-        {
-            const string query = """
-                                 SELECT `serverId`
-                                 FROM `vip_servers`
-                                 WHERE `serverIp` = @ServerIP AND `port` = @ServerPort;
-                                 """;
-
-            return await connection.ExecuteScalarAsync<long>(query,
-                new
-                {
-                    ServerIP = vipCore.CoreConfig.ServerIp,
-                    ServerPort = vipCore.CoreConfig.ServerPort
-                });
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e.ToString());
-        }
-
-        return -1;
-    }
 }
