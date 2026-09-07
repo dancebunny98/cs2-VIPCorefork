@@ -15,9 +15,13 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   CONFIGURATION: Release
-  SHARED_DLLS: "VipCoreApi.dll IksAdminApi.dll CS2ScreenMenuAPI.dll LevelsRanksApi.dll FakeRanksApi.dll AnyBaseLib.dll PlayerSettingsApi.dll"
+  # Список общих контрактов – они не должны попадать в папки плагинов
+  SHARED_DLLS: "VipCoreApi.dll MenuManagerApi.dll IksAdminApi.dll CS2ScreenMenuAPI.dll LevelsRanksApi.dll FakeRanksApi.dll AnyBaseLib.dll PlayerSettingsApi.dll"
 
 jobs:
+  # ------------------------------------------------------------------
+  # 0) Проверка, что папка build/ не закоммичена
+  # ------------------------------------------------------------------
   no-tracked-build-output:
     name: Guard against committed build/ output
     runs-on: ubuntu-latest
@@ -34,7 +38,7 @@ jobs:
           echo "No committed build/ output files found (README.md inside build/ is allowed)."
 
   # ------------------------------------------------------------------
-  # 1) VipCoreApi (shared)
+  # 1) Сборка VipCoreApi (shared)
   # ------------------------------------------------------------------
   build-vipcoreapi:
     name: Build VipCoreApi
@@ -65,18 +69,50 @@ jobs:
           if-no-files-found: error
 
   # ------------------------------------------------------------------
-  # 2) VIPCore (core) + копирование MenuManagerApi.dll в плагин
+  # 2) Копирование MenuManagerApi.dll в shared/ (если есть)
+  #    Файл ищется в RequirmentsApi/ или корне
+  # ------------------------------------------------------------------
+  copy-menumanagerapi:
+    name: Copy MenuManagerApi to shared
+    runs-on: ubuntu-latest
+    needs: no-tracked-build-output
+    steps:
+      - uses: actions/checkout@v5
+      - name: Copy MenuManagerApi.dll
+        run: |
+          found=""
+          for loc in "./MenuManagerApi.dll" "./RequirmentsApi/MenuManagerApi.dll" "./VIPCore/MenuManagerApi.dll"; do
+            if [ -f "$loc" ]; then
+              mkdir -p "out/addons/counterstrikesharp/shared/MenuManagerApi"
+              cp "$loc" "out/addons/counterstrikesharp/shared/MenuManagerApi/"
+              echo "MenuManagerApi.dll copied from $loc"
+              found="yes"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "::warning::MenuManagerApi.dll not found, skipping (module menus may fallback to chat)"
+          fi
+      - uses: actions/upload-artifact@v6
+        with:
+          name: MenuManagerApi
+          path: out/
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------
+  # 3) Сборка VIPCore (ядро)
+  #    Копируются все приватные зависимости, общие контракты удаляются.
   # ------------------------------------------------------------------
   build-vipcore:
     name: Build VIPCore
     runs-on: ubuntu-latest
-    needs: build-vipcoreapi
+    needs: [build-vipcoreapi, copy-menumanagerapi]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-      - name: Restore & build VIPCore
+      - name: Restore & build
         run: |
           dotnet restore VIPCore/VIPCore/VIPCore.csproj
           dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
@@ -87,20 +123,16 @@ jobs:
           mkdir -p "$PLUGIN_OUT"
           BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
 
+          # Копируем все .dll и .pdb из папки сборки
           find "$BIN" -maxdepth 1 \( -name "*.dll" -o -name "*.pdb" \) -exec cp {} "$PLUGIN_OUT"/ \;
 
+          # Удаляем общие контракты
           for dep in $SHARED_DLLS; do
             f="$PLUGIN_OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
           done
 
-          if [ -f "RequirmentsApi/MenuManagerApi.dll" ]; then
-            cp "RequirmentsApi/MenuManagerApi.dll" "$PLUGIN_OUT/"
-            echo "MenuManagerApi.dll copied to plugins/VIPCore/"
-          else
-            echo "::warning::MenuManagerApi.dll not found in RequirmentsApi/, skipping"
-          fi
-
+          # Копируем lang, если есть
           if [ -d "VIPCore/VIPCore/lang" ]; then
             mkdir -p "$PLUGIN_OUT/lang"
             cp VIPCore/VIPCore/lang/*.json "$PLUGIN_OUT/lang"/ 2>/dev/null || true
@@ -113,12 +145,13 @@ jobs:
           if-no-files-found: error
 
   # ------------------------------------------------------------------
-  # 3) Модули (VIP_*)
+  # 4) Сборка всех модулей VIP_* (лежат в VIPCore/modules/)
+  #    Каждый модуль собирается отдельно, сбой одного не останавливает другие.
   # ------------------------------------------------------------------
   build-modules:
     name: Build ${{ matrix.module }}
     runs-on: ubuntu-latest
-    needs: build-vipcoreapi
+    needs: [build-vipcoreapi, copy-menumanagerapi]
     strategy:
       fail-fast: false
       matrix:
@@ -166,6 +199,8 @@ jobs:
           - VIP_VipsOnline
           - VIP_WeaponsMenu
           - VIP_Zeus
+          # VIP_GunsPack отсутствует, поэтому не включён
+          # VIP_ExperienceMultiplier – отдельно ниже
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
@@ -202,11 +237,13 @@ jobs:
           find "$BIN" -maxdepth 1 -name "*.dll" -exec cp {} "$OUT"/ \;
           find "$BIN" -maxdepth 1 -name "*.pdb" -exec cp {} "$OUT"/ \;
 
+          # Удаляем общие контракты
           for dep in $SHARED_DLLS; do
             f="$OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
           done
 
+          # Копируем lang, если есть
           if [ -d "$PROJDIR/lang" ]; then
             mkdir -p "$OUT/lang"
             cp "$PROJDIR"/lang/*.json "$OUT/lang"/ 2>/dev/null || true
@@ -223,12 +260,12 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------------
-  # 4) VIP_ExperienceMultiplier (optional)
+  # 5) VIP_ExperienceMultiplier – опционально (может требовать RanksApi)
   # ------------------------------------------------------------------
   build-experience-multiplier:
     name: Build VIP_ExperienceMultiplier (optional)
     runs-on: ubuntu-latest
-    needs: build-vipcoreapi
+    needs: [build-vipcoreapi, copy-menumanagerapi]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
@@ -246,7 +283,7 @@ jobs:
           dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore || true
 
   # ------------------------------------------------------------------
-  # 5) Финальный артефакт
+  # 6) Финальный артефакт – объединяем всё из загруженных артефактов
   # ------------------------------------------------------------------
   final-artifact:
     name: Merge and upload final VIPCore build
@@ -258,7 +295,7 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           path: artifacts
-      - name: Merge
+      - name: Merge into one structure
         run: |
           mkdir -p final/addons/counterstrikesharp
           for dir in artifacts/*/out; do
