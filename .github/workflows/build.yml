@@ -5,8 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'VIPCore/**'
-      - 'modules/**'            # теперь отслеживаем изменения в модулях
-      - 'RequirmentsApi/**'     # если там есть MenuManagerApi
       - '.github/workflows/build.yml'
   pull_request:
     branches: [ main ]
@@ -16,7 +14,6 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   CONFIGURATION: Release
-  # Общие контракты – не должны копироваться в папки плагинов
   SHARED_DLLS: "VipCoreApi.dll MenuManagerApi.dll IksAdminApi.dll CS2ScreenMenuAPI.dll LevelsRanksApi.dll FakeRanksApi.dll AnyBaseLib.dll PlayerSettingsApi.dll"
 
 jobs:
@@ -35,9 +32,9 @@ jobs:
           fi
           echo "No committed build/ output files found (README.md inside build/ is allowed)."
 
-  # ------------------------------------------------------------------
-  # 1) VipCoreApi – общая библиотека, кладём в shared/
-  # ------------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # 1) VipCoreApi – общая библиотека
+  # ----------------------------------------------------------------
   build-vipcoreapi:
     name: Build VipCoreApi
     runs-on: ubuntu-latest
@@ -47,12 +44,10 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VipCoreApi/VipCoreApi.csproj
           dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore
-
       - name: Collect output
         run: |
           set -e
@@ -62,17 +57,15 @@ jobs:
           cp "$BIN/VipCoreApi.dll" "$SHARED_OUT/"
           [ -f "$BIN/VipCoreApi.pdb" ] && cp "$BIN/VipCoreApi.pdb" "$SHARED_OUT/"
           find out -type f
-
       - uses: actions/upload-artifact@v6
         with:
           name: VipCoreApi-${{ github.sha }}
           path: out/
           if-no-files-found: error
 
-  # ------------------------------------------------------------------
-  # 2) MenuManagerApi – копируем из RequirmentsApi/ в shared/
-  #    Если файла нет – предупреждение, но сборка продолжается.
-  # ------------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # 2) MenuManagerApi – копируем из возможных мест
+  # ----------------------------------------------------------------
   copy-menumanagerapi:
     name: Copy MenuManagerApi to shared
     runs-on: ubuntu-latest
@@ -81,12 +74,18 @@ jobs:
       - uses: actions/checkout@v5
       - name: Copy MenuManagerApi.dll
         run: |
-          if [ -f "RequirmentsApi/MenuManagerApi.dll" ]; then
-            mkdir -p "out/addons/counterstrikesharp/shared/MenuManagerApi"
-            cp "RequirmentsApi/MenuManagerApi.dll" "out/addons/counterstrikesharp/shared/MenuManagerApi/"
-            echo "MenuManagerApi.dll copied from RequirmentsApi/"
-          else
-            echo "::warning::MenuManagerApi.dll not found in RequirmentsApi/, skipping"
+          found=""
+          for loc in "./MenuManagerApi.dll" "./VIPCore/MenuManagerApi.dll" "./RequirmentsApi/MenuManagerApi.dll"; do
+            if [ -f "$loc" ]; then
+              mkdir -p "out/addons/counterstrikesharp/shared/MenuManagerApi"
+              cp "$loc" "out/addons/counterstrikesharp/shared/MenuManagerApi/"
+              echo "MenuManagerApi.dll copied from $loc"
+              found="yes"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "::warning::MenuManagerApi.dll not found in any expected location, skipping"
           fi
       - uses: actions/upload-artifact@v6
         with:
@@ -94,10 +93,9 @@ jobs:
           path: out/
           if-no-files-found: warn
 
-  # ------------------------------------------------------------------
+  # ----------------------------------------------------------------
   # 3) VIPCore – ядро плагина
-  #    Копируем все .dll и .pdb из папки сборки, удаляем общие контракты.
-  # ------------------------------------------------------------------
+  # ----------------------------------------------------------------
   build-vipcore:
     name: Build VIPCore
     runs-on: ubuntu-latest
@@ -107,46 +105,38 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VIPCore/VIPCore.csproj
           dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
-
       - name: Collect output
         run: |
           set -e
           PLUGIN_OUT="out/addons/counterstrikesharp/plugins/VIPCore"
           mkdir -p "$PLUGIN_OUT"
           BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
-
           # Копируем все .dll и .pdb
           find "$BIN" -maxdepth 1 \( -name "*.dll" -o -name "*.pdb" \) -exec cp {} "$PLUGIN_OUT"/ \;
-
           # Удаляем общие контракты
           for dep in $SHARED_DLLS; do
             f="$PLUGIN_OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
           done
-
-          # Копируем переводы, если есть
+          # Копируем переводы
           if [ -d "VIPCore/VIPCore/lang" ]; then
             mkdir -p "$PLUGIN_OUT/lang"
             cp VIPCore/VIPCore/lang/*.json "$PLUGIN_OUT/lang"/ 2>/dev/null || true
           fi
-
           find out -type f
-
       - uses: actions/upload-artifact@v6
         with:
           name: VIPCore-${{ github.sha }}
           path: out/
           if-no-files-found: error
 
-  # ------------------------------------------------------------------
-  # 4) Модули VIP_* – теперь они лежат в папке modules/ (как и в IksAdmin)
-  #    Каждый собирается отдельно, удаляем общие контракты.
-  # ------------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # 4) Модули VIP_* – лежат в VIPCore/modules/
+  # ----------------------------------------------------------------
   build-modules:
     name: Build ${{ matrix.module }}
     runs-on: ubuntu-latest
@@ -199,64 +189,51 @@ jobs:
           - VIP_VipsOnline
           - VIP_WeaponsMenu
           - VIP_Zeus
-          # VIP_ExperienceMultiplier – отдельно ниже
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-
       - name: Restore & build
         id: build
         continue-on-error: true
         run: |
           set -e
-          # Путь к модулю – теперь modules/ (не VIPCore/modules)
-          PROJ="modules/${{ matrix.module }}/${{ matrix.module }}.csproj"
+          PROJ="VIPCore/modules/${{ matrix.module }}/${{ matrix.module }}.csproj"
           if [ ! -f "$PROJ" ]; then
             echo "::warning::$PROJ not found, skipping"
             exit 0
           fi
           dotnet restore "$PROJ"
           dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore
-
       - name: Collect output
         if: steps.build.outcome == 'success'
         run: |
           set -e
           MOD="${{ matrix.module }}"
-          PROJDIR="modules/$MOD"
+          PROJDIR="VIPCore/modules/$MOD"
           OUT="out/addons/counterstrikesharp/plugins/$MOD"
           mkdir -p "$OUT"
-
           DLL=$(find "$PROJDIR" -path '*/obj/*' -prune -o -name "$MOD.dll" -print | head -n1)
           if [ -z "$DLL" ]; then
             echo "::warning::could not locate $MOD.dll after a successful build"
             exit 0
           fi
-
           BIN=$(dirname "$DLL")
           find "$BIN" -maxdepth 1 -name "*.dll" -exec cp {} "$OUT"/ \;
           find "$BIN" -maxdepth 1 -name "*.pdb" -exec cp {} "$OUT"/ \;
-
-          # Удаляем общие контракты
           for dep in $SHARED_DLLS; do
             f="$OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
           done
-
-          # Копируем lang, если есть
           if [ -d "$PROJDIR/lang" ]; then
             mkdir -p "$OUT/lang"
             cp "$PROJDIR"/lang/*.json "$OUT/lang"/ 2>/dev/null || true
           fi
-
           find out -type f
-
       - name: Report failure
         if: steps.build.outcome == 'failure'
         run: echo "::warning::${{ matrix.module }} failed to build - see the 'Restore & build' step log above"
-
       - uses: actions/upload-artifact@v6
         if: steps.build.outcome == 'success'
         with:
@@ -264,10 +241,9 @@ jobs:
           path: out/
           if-no-files-found: warn
 
-  # ------------------------------------------------------------------
-  # 5) VIP_ExperienceMultiplier – опционально, может требовать RanksApi
-  #    Путь тоже modules/
-  # ------------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # 5) VIP_ExperienceMultiplier – опционально
+  # ----------------------------------------------------------------
   build-experience-multiplier:
     name: Build VIP_ExperienceMultiplier (optional, needs RanksApi)
     runs-on: ubuntu-latest
@@ -278,10 +254,9 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-
       - name: Restore & build
         run: |
-          PROJ="modules/VIP_ExperienceMultiplier/VIP_ExperienceMultiplier.csproj"
+          PROJ="VIPCore/modules/VIP_ExperienceMultiplier/VIP_ExperienceMultiplier.csproj"
           if [ ! -f "$PROJ" ]; then
             echo "::warning::$PROJ not found, skipping"
             exit 0
