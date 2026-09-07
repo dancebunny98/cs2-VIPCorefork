@@ -6,7 +6,8 @@
 
 ## Installation
 1. Install [CounterStrike Sharp](https://github.com/roflmuffin/CounterStrikeSharp), [Metamod:Source](https://www.sourcemm.net/downloads.php/?branch=master)
-3. Download [VIPCore](https://github.com/partiusfabaa/cs2-VIPCore/releases)
+and fix WASD menu [MenuManagerCS2Firk](https://github.com/Stimayk/MenuManagerCS2/releases)
+3. Download [VIPCore](https://github.com/dancebunny98/cs2-VIPCorefork/releases) or Beta and Fix [Auto build](https://github.com/dancebunny98/cs2-VIPCorefork/actions)
 4. Unpack the archive and upload it to the game server **(example path: `addons/counterstrikesharp/plugins`)**
 
 ### Put the modules in this path `addons/counterstrikesharp/plugins`
@@ -30,6 +31,7 @@ Located in the folder `addons/counterstrikesharp/configs/plugins/VIPCore`
   "TimeMode": 0,		   // 0 - seconds | 1 - minutes | 2 - hours | 3 - days)
   "ServerId": 0,		   // SERVER ID
   "UseCenterHtmlMenu": true,	   //If `true`, the menu will be in the center, if `false`, it will be in the chat. Note that if you have another plugin that uses `CenterHtml`, server crashes may occur
+  "UseWasdMenu": true, // fix UseCenterHtmlMenu WASD menu MenuManagerCore 
   "ServerIP": "0.0.0.0", 	   // default ip
   "ServerPort": 27015, 		   // default port
   "ReOpenMenuAfterItemClick": true,//Whether to reopen the menu after selecting an item | true - yes | false - no
@@ -46,14 +48,66 @@ Located in the folder `addons/counterstrikesharp/configs/plugins/VIPCore`
 ### vip.json
 ```json
 {
-  "Delay": 2.0
-  "Groups": {
-    "VIP1": {
-      "Values": {
-        "feature1": value1,
-	"feature2": value2
-      }
-    }
+    "Groups": {
+        "VIP": {
+            "Values": {
+                "Speed": 1,
+                "NoFallDamage": true,
+                "KillScreen": 1,
+				"flags": [ "@vip/vip", "@css/vip", "#css/vip" ],
+                "FastPlant": true,
+                "Defuser": 1,
+				"DefuseKit": 1,
+                "fastdefuse": 20,
+				"Tag": [ "VIP"],
+				"Grenades": {
+					"CT": {
+						"weapon_smokegrenade": 1,
+						"weapon_hegrenade": 1,
+						"weapon_incgrenade": 1
+							},
+					"T": {
+						"weapon_smokegrenade": 1,
+						"weapon_hegrenade": 1,
+						"weapon_molotov": 1
+						}
+				},
+				"ExperienceMultiplier": 1.5
+           }
+       },
+       "ADM": {
+            "Values": {
+                "Zeus": 1,
+                "Speed": 1,
+                "NoFallDamage": true,
+                "KillScreen": 1,
+                "FastPlant": true,
+                "AntiFlash": 3,
+                "Bhop": {
+					"Timer": 15.0,
+					"MaxSpeed": 4500
+				},
+				"Grenades": {
+					"CT": {
+						"weapon_smokegrenade": 1,
+						"weapon_hegrenade": 1,
+						"weapon_incgrenade": 1
+							},
+					"T": {
+						"weapon_smokegrenade": 1,
+						"weapon_hegrenade": 1,
+						"weapon_molotov": 1
+						}
+				},
+                "Defuser": 1,
+				"DefuseKit": 1,
+                "fastdefuse": 50,
+                "FastReload": true,
+                "Armor": 100,
+                "Tag": [ "ADMIN", "OWNER" ],
+				"ExperienceMultiplier": 3.5
+           }
+       }
   }
 }
 ```
