@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'VIPCore/**'
+      - 'RequirmentsApi/**'
       - '.github/workflows/build.yml'
   pull_request:
     branches: [ main ]
@@ -32,9 +33,9 @@ jobs:
           fi
           echo "No committed build/ output files found (README.md inside build/ is allowed)."
 
-  # ----------------------------------------------------------------
-  # 1) VipCoreApi – общая библиотека, кладём в shared/
-  # ----------------------------------------------------------------
+  # ------------------------------------------------------------------
+  # 1) Сборка VipCoreApi (shared)
+  # ------------------------------------------------------------------
   build-vipcoreapi:
     name: Build VipCoreApi
     runs-on: ubuntu-latest
@@ -56,21 +57,24 @@ jobs:
           BIN="VIPCore/VipCoreApi/bin/${{ env.CONFIGURATION }}/net8.0"
           cp "$BIN/VipCoreApi.dll" "$SHARED_OUT/"
           [ -f "$BIN/VipCoreApi.pdb" ] && cp "$BIN/VipCoreApi.pdb" "$SHARED_OUT/"
-          # Не загружаем артефакт отдельно, он будет включён в основной артефакт VIPCore
+          echo "VipCoreApi collected"
+          find out -type f
 
-  # ----------------------------------------------------------------
-  # 2) MenuManagerApi – копируем в shared/ внутри out/
-  # ----------------------------------------------------------------
+  # ------------------------------------------------------------------
+  # 2) Копирование MenuManagerApi из локального источника в shared/
+  #    (без отдельного артефакта – всё складывается в общую папку out/)
+  # ------------------------------------------------------------------
   copy-menumanagerapi:
     name: Copy MenuManagerApi to shared
     runs-on: ubuntu-latest
     needs: no-tracked-build-output
     steps:
       - uses: actions/checkout@v5
-      - name: Copy MenuManagerApi.dll
+      - name: Locate and copy MenuManagerApi.dll
         run: |
-          found=""
-          for loc in "./MenuManagerApi.dll" "./VIPCore/MenuManagerApi.dll" "./RequirmentsApi/MenuManagerApi.dll"; do
+          set -e
+          # Ищем файл в нескольких возможных местах
+          for loc in "./MenuManagerApi.dll" "./RequirmentsApi/MenuManagerApi.dll" "./VIPCore/MenuManagerApi.dll"; do
             if [ -f "$loc" ]; then
               mkdir -p "out/addons/counterstrikesharp/shared/MenuManagerApi"
               cp "$loc" "out/addons/counterstrikesharp/shared/MenuManagerApi/"
@@ -80,16 +84,15 @@ jobs:
             fi
           done
           if [ -z "$found" ]; then
-            echo "::warning::MenuManagerApi.dll not found in any expected location, skipping"
+            echo "::warning::MenuManagerApi.dll not found, skipping (module menus may fallback to chat)"
           fi
-          # Не загружаем артефакт отдельно
+          find out -type f 2>/dev/null || true
 
-  # ----------------------------------------------------------------
-  # 3) VIPCore – ядро плагина, копируем все зависимости,
-  #    удаляем общие контракты, собираем единый артефакт
-  # ----------------------------------------------------------------
+  # ------------------------------------------------------------------
+  # 3) Сборка VIPCore (ядро) и объединение с shared
+  # ------------------------------------------------------------------
   build-vipcore:
-    name: Build VIPCore
+    name: Build VIPCore (core)
     runs-on: ubuntu-latest
     needs: [build-vipcoreapi, copy-menumanagerapi]
     steps:
@@ -97,38 +100,37 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-      - name: Restore & build
+      - name: Restore & build VIPCore
         run: |
           dotnet restore VIPCore/VIPCore/VIPCore.csproj
           dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
-      - name: Collect output
+      - name: Collect VIPCore output
         run: |
           set -e
           PLUGIN_OUT="out/addons/counterstrikesharp/plugins/VIPCore"
           mkdir -p "$PLUGIN_OUT"
           BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
-          # Копируем все .dll и .pdb
+
+          # Копируем все .dll и .pdb из папки сборки
           find "$BIN" -maxdepth 1 \( -name "*.dll" -o -name "*.pdb" \) -exec cp {} "$PLUGIN_OUT"/ \;
-          # Удаляем общие контракты (они уже есть в shared/)
+
+          # Удаляем общие контракты (они уже в shared/)
           for dep in $SHARED_DLLS; do
             f="$PLUGIN_OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
           done
-          # Копируем переводы
+
+          # Копируем lang, если есть
           if [ -d "VIPCore/VIPCore/lang" ]; then
             mkdir -p "$PLUGIN_OUT/lang"
             cp VIPCore/VIPCore/lang/*.json "$PLUGIN_OUT/lang"/ 2>/dev/null || true
           fi
+          echo "VIPCore collected"
           find out -type f
-      - uses: actions/upload-artifact@v6
-        with:
-          name: VIPCore-${{ github.sha }}
-          path: out/
-          if-no-files-found: error
 
-  # ----------------------------------------------------------------
-  # 4) Модули VIP_* – каждый собирается отдельно и загружает свой артефакт
-  # ----------------------------------------------------------------
+  # ------------------------------------------------------------------
+  # 4) Сборка всех VIP-модулей (лежат в VIPCore/modules/)
+  # ------------------------------------------------------------------
   build-modules:
     name: Build ${{ matrix.module }}
     runs-on: ubuntu-latest
@@ -181,12 +183,13 @@ jobs:
           - VIP_VipsOnline
           - VIP_WeaponsMenu
           - VIP_Zeus
+          # VIP_ExperienceMultiplier – отдельно ниже (опционально)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-      - name: Restore & build
+      - name: Restore & build module
         id: build
         continue-on-error: true
         run: |
@@ -198,7 +201,7 @@ jobs:
           fi
           dotnet restore "$PROJ"
           dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore
-      - name: Collect output
+      - name: Collect module output
         if: steps.build.outcome == 'success'
         run: |
           set -e
@@ -206,38 +209,39 @@ jobs:
           PROJDIR="VIPCore/modules/$MOD"
           OUT="out/addons/counterstrikesharp/plugins/$MOD"
           mkdir -p "$OUT"
+
           DLL=$(find "$PROJDIR" -path '*/obj/*' -prune -o -name "$MOD.dll" -print | head -n1)
           if [ -z "$DLL" ]; then
-            echo "::warning::could not locate $MOD.dll after a successful build"
+            echo "::warning::could not locate $MOD.dll after successful build"
             exit 0
           fi
+
           BIN=$(dirname "$DLL")
           find "$BIN" -maxdepth 1 -name "*.dll" -exec cp {} "$OUT"/ \;
           find "$BIN" -maxdepth 1 -name "*.pdb" -exec cp {} "$OUT"/ \;
+
+          # Удаляем общие контракты
           for dep in $SHARED_DLLS; do
             f="$OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
           done
+
+          # Копируем lang, если есть
           if [ -d "$PROJDIR/lang" ]; then
             mkdir -p "$OUT/lang"
             cp "$PROJDIR"/lang/*.json "$OUT/lang"/ 2>/dev/null || true
           fi
+          echo "$MOD collected"
           find out -type f
       - name: Report failure
         if: steps.build.outcome == 'failure'
-        run: echo "::warning::${{ matrix.module }} failed to build - see the 'Restore & build' step log above"
-      - uses: actions/upload-artifact@v6
-        if: steps.build.outcome == 'success'
-        with:
-          name: ${{ matrix.module }}-${{ github.sha }}
-          path: out/
-          if-no-files-found: warn
+        run: echo "::warning::${{ matrix.module }} failed to build - see step log above"
 
-  # ----------------------------------------------------------------
-  # 5) VIP_ExperienceMultiplier – опционально
-  # ----------------------------------------------------------------
+  # ------------------------------------------------------------------
+  # 5) VIP_ExperienceMultiplier – опционально, может требовать RanksApi
+  # ------------------------------------------------------------------
   build-experience-multiplier:
-    name: Build VIP_ExperienceMultiplier (optional, needs RanksApi)
+    name: Build VIP_ExperienceMultiplier (optional)
     runs-on: ubuntu-latest
     needs: [build-vipcoreapi, copy-menumanagerapi]
     continue-on-error: true
@@ -246,7 +250,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
-      - name: Restore & build
+      - name: Restore & build (allow failure)
         run: |
           PROJ="VIPCore/modules/VIP_ExperienceMultiplier/VIP_ExperienceMultiplier.csproj"
           if [ ! -f "$PROJ" ]; then
@@ -255,3 +259,46 @@ jobs:
           fi
           dotnet restore "$PROJ" || true
           dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore || true
+
+  # ------------------------------------------------------------------
+  # 6) ФИНАЛЬНЫЙ АРТЕФАКТ – объединяем всё, что накопилось в out/
+  # ------------------------------------------------------------------
+  final-artifact:
+    name: Upload final VIPCore build
+    runs-on: ubuntu-latest
+    needs: [build-vipcore, build-modules, build-experience-multiplier]
+    # Даже если часть модулей упала, загружаем то, что собралось
+    if: always()
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download all built components
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts
+      - name: Merge into one structure
+        run: |
+          # Структура artifacts содержит папки от каждого задания:
+          # VIPCore, VipCoreApi, MenuManagerApi, модули...
+          # Мы скопируем всё в единую папку final/
+          mkdir -p final/addons/counterstrikesharp
+
+          # Сначала копируем shared от VipCoreApi и MenuManagerApi (они уже лежат в out/ в своих артефактах)
+          # Но проще: у нас после всех сборок в каждом артефакте есть папка out/.
+          # Мы просто скопируем всё содержимое всех out/ в final.
+          # Однако в артефактах могут быть дублирующиеся пути, но это не страшно.
+          for dir in artifacts/*/out; do
+            if [ -d "$dir" ]; then
+              cp -r "$dir"/* final/ 2>/dev/null || true
+            fi
+          done
+
+          # Также если какие-то артефакты не содержат out/ (например, пустые), игнорируем.
+          # В результате final/addons/counterstrikesharp будет содержать plugins/ и shared/
+          echo "Final structure:"
+          find final -type f
+      - name: Upload final artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: VIPCore-${{ github.sha }}
+          path: final/
+          if-no-files-found: error
