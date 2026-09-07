@@ -15,8 +15,10 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   CONFIGURATION: Release
-  # Общие контракты, которые должны быть в shared/ (MenuManagerApi убрали)
+  # Общие контракты (MenuManagerApi убрали)
   SHARED_DLLS: "VipCoreApi.dll IksAdminApi.dll CS2ScreenMenuAPI.dll LevelsRanksApi.dll FakeRanksApi.dll AnyBaseLib.dll PlayerSettingsApi.dll"
+  # Подавляем надоедливые предупреждения о null и неиспользуемых полях
+  NO_WARN: CS8618,CS8602,CS8604,CS8625,CS0169,CS0649
 
 jobs:
   no-tracked-build-output:
@@ -49,7 +51,7 @@ jobs:
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VipCoreApi/VipCoreApi.csproj
-          dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore
+          dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn=${{ env.NO_WARN }}
       - name: Collect VipCoreApi
         run: |
           set -e
@@ -80,7 +82,7 @@ jobs:
       - name: Restore & build VIPCore
         run: |
           dotnet restore VIPCore/VIPCore/VIPCore.csproj
-          dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
+          dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn=${{ env.NO_WARN }}
       - name: Collect VIPCore output
         run: |
           set -e
@@ -146,7 +148,6 @@ jobs:
           - VIP_Gifts
           - VIP_Gravity
           - VIP_Grenades
-          - VIP_GunsPack
           - VIP_Health
           - VIP_Healthshot
           - VIP_InfiniteAmmo
@@ -172,6 +173,7 @@ jobs:
           - VIP_VipsOnline
           - VIP_WeaponsMenu
           - VIP_Zeus
+          # VIP_GunsPack отсутствует, поэтому его нет в списке
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
@@ -188,7 +190,7 @@ jobs:
             exit 0
           fi
           dotnet restore "$PROJ"
-          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn=${{ env.NO_WARN }}
       - name: Collect module output
         if: steps.build.outcome == 'success'
         run: |
@@ -208,7 +210,7 @@ jobs:
           find "$BIN" -maxdepth 1 -name "*.dll" -exec cp {} "$OUT"/ \;
           find "$BIN" -maxdepth 1 -name "*.pdb" -exec cp {} "$OUT"/ \;
 
-          # Удаляем общие контракты (VipCoreApi и др.)
+          # Удаляем общие контракты
           for dep in $SHARED_DLLS; do
             f="$OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
@@ -253,7 +255,7 @@ jobs:
             exit 0
           fi
           dotnet restore "$PROJ" || true
-          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore || true
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn=${{ env.NO_WARN }} || true
 
   # ------------------------------------------------------------------
   # 5) Финальный артефакт – объединяем всё из загруженных артефактов
@@ -271,13 +273,11 @@ jobs:
       - name: Merge into one structure
         run: |
           mkdir -p final/addons/counterstrikesharp
-          # Копируем содержимое всех out/ папок из каждого артефакта
           for dir in artifacts/*/out; do
             if [ -d "$dir" ]; then
               cp -r "$dir"/* final/ 2>/dev/null || true
             fi
           done
-          # Если есть артефакт без out/, но с addons/ (например, если кто-то загрузил напрямую)
           for dir in artifacts/*/addons; do
             if [ -d "$dir" ]; then
               cp -r "$dir"/* final/addons/ 2>/dev/null || true
