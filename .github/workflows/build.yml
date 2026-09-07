@@ -33,7 +33,7 @@ jobs:
           echo "No committed build/ output files found (README.md inside build/ is allowed)."
 
   # ----------------------------------------------------------------
-  # 1) VipCoreApi – общая библиотека
+  # 1) VipCoreApi – общая библиотека, кладём в shared/
   # ----------------------------------------------------------------
   build-vipcoreapi:
     name: Build VipCoreApi
@@ -56,15 +56,10 @@ jobs:
           BIN="VIPCore/VipCoreApi/bin/${{ env.CONFIGURATION }}/net8.0"
           cp "$BIN/VipCoreApi.dll" "$SHARED_OUT/"
           [ -f "$BIN/VipCoreApi.pdb" ] && cp "$BIN/VipCoreApi.pdb" "$SHARED_OUT/"
-          find out -type f
-      - uses: actions/upload-artifact@v6
-        with:
-          name: VipCoreApi-${{ github.sha }}
-          path: out/
-          if-no-files-found: error
+          # Не загружаем артефакт отдельно, он будет включён в основной артефакт VIPCore
 
   # ----------------------------------------------------------------
-  # 2) MenuManagerApi – копируем из возможных мест
+  # 2) MenuManagerApi – копируем в shared/ внутри out/
   # ----------------------------------------------------------------
   copy-menumanagerapi:
     name: Copy MenuManagerApi to shared
@@ -87,14 +82,11 @@ jobs:
           if [ -z "$found" ]; then
             echo "::warning::MenuManagerApi.dll not found in any expected location, skipping"
           fi
-      - uses: actions/upload-artifact@v6
-        with:
-          name: MenuManagerApi-${{ github.sha }}
-          path: out/
-          if-no-files-found: warn
+          # Не загружаем артефакт отдельно
 
   # ----------------------------------------------------------------
-  # 3) VIPCore – ядро плагина
+  # 3) VIPCore – ядро плагина, копируем все зависимости,
+  #    удаляем общие контракты, собираем единый артефакт
   # ----------------------------------------------------------------
   build-vipcore:
     name: Build VIPCore
@@ -117,7 +109,7 @@ jobs:
           BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
           # Копируем все .dll и .pdb
           find "$BIN" -maxdepth 1 \( -name "*.dll" -o -name "*.pdb" \) -exec cp {} "$PLUGIN_OUT"/ \;
-          # Удаляем общие контракты
+          # Удаляем общие контракты (они уже есть в shared/)
           for dep in $SHARED_DLLS; do
             f="$PLUGIN_OUT/$dep"
             [ -f "$f" ] && { echo "Removing $dep (must come from shared/)"; rm -f "$f"; }
@@ -135,7 +127,7 @@ jobs:
           if-no-files-found: error
 
   # ----------------------------------------------------------------
-  # 4) Модули VIP_* – лежат в VIPCore/modules/
+  # 4) Модули VIP_* – каждый собирается отдельно и загружает свой артефакт
   # ----------------------------------------------------------------
   build-modules:
     name: Build ${{ matrix.module }}
