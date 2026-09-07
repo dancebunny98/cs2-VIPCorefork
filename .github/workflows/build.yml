@@ -16,7 +16,6 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   CONFIGURATION: Release
   SHARED_DLLS: "VipCoreApi.dll IksAdminApi.dll CS2ScreenMenuAPI.dll LevelsRanksApi.dll FakeRanksApi.dll AnyBaseLib.dll PlayerSettingsApi.dll"
-  NO_WARN: "CS8618;CS8602;CS8604;CS8625;CS0169;CS0649"
 
 jobs:
   no-tracked-build-output:
@@ -49,7 +48,7 @@ jobs:
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VipCoreApi/VipCoreApi.csproj
-          dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn="${{ env.NO_WARN }}"
+          dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore
       - name: Collect output
         run: |
           set -e
@@ -66,7 +65,7 @@ jobs:
           if-no-files-found: error
 
   # ------------------------------------------------------------------
-  # 2) VIPCore (core) + копирование MenuManagerApi.dll в папку плагина
+  # 2) VIPCore (core) + копирование MenuManagerApi.dll в плагин
   # ------------------------------------------------------------------
   build-vipcore:
     name: Build VIPCore
@@ -80,7 +79,7 @@ jobs:
       - name: Restore & build VIPCore
         run: |
           dotnet restore VIPCore/VIPCore/VIPCore.csproj
-          dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn="${{ env.NO_WARN }}"
+          dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
       - name: Collect output
         run: |
           set -e
@@ -183,7 +182,7 @@ jobs:
             exit 0
           fi
           dotnet restore "$PROJ"
-          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn="${{ env.NO_WARN }}"
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore
       - name: Collect output
         if: steps.build.outcome == 'success'
         run: |
@@ -244,7 +243,7 @@ jobs:
             exit 0
           fi
           dotnet restore "$PROJ" || true
-          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore -p:NoWarn="${{ env.NO_WARN }}" || true
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore || true
 
   # ------------------------------------------------------------------
   # 5) Финальный артефакт
