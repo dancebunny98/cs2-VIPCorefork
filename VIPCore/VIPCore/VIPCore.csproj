@@ -16,15 +16,14 @@
   <ItemGroup>
     <ProjectReference Include="..\VipCoreApi\VipCoreApi.csproj">
       <!-- VipCoreApi – общий контракт, поставляется из shared/ на сервере -->
-      <Private>false</Private>
+      <Private>true</Private>
     </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="MenuManagerApi">
-      <HintPath>..\MenuManagerApi.dll</HintPath>
-      <!-- Если хотите, чтобы MenuManagerApi тоже была в папке плагина, установите <Private>true</Private> или удалите эту строку -->
-      <Private>false</Private>
+      <HintPath>..\..\RequirmentsApi\MenuManagerApi.dll</HintPath>
+      <Private>true</Private>
     </Reference>
   </ItemGroup>
 
