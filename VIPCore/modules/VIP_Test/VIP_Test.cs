@@ -19,7 +19,7 @@ public class VipTest : BasePlugin
 
     private static readonly string Feature = "vip_test_count";
     private IVipCoreApi? _api;
-    private Config _config = null!;
+    private Config? _config;
     
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
@@ -35,6 +35,17 @@ public class VipTest : BasePlugin
     public void OnCommandVipTest(CCSPlayerController? controller, CommandInfo command)
     {
         if (controller == null) return;
+
+        // ВАЖНО: _api/_config проверялись только один раз, в OnAllPluginsLoaded.
+        // Если в тот момент VIPCore ещё не поднялся (порядок загрузки плагинов),
+        // _api остаётся null, а _config - null! (никогда не инициализирован),
+        // и первое же обращение к _config.VipTestEnabled ниже кидало
+        // NullReferenceException прямо в обработчике команды.
+        if (_api == null || _config == null)
+        {
+            command.ReplyToCommand(" VIP_Test ещё не готов (VIPCore не найден при загрузке) - перезагрузите плагины.");
+            return;
+        }
 
         if (!_config.VipTestEnabled) return;
 
@@ -53,42 +64,72 @@ public class VipTest : BasePlugin
 
     private async void GivePlayerVipTest(CCSPlayerController player, SteamID steamId, Config vipTest)
     {
-        var vipTestEndTime = await GetEndTime(steamId.SteamId2);
-        var vipTestCount = _api.GetPlayerCookie<int>(steamId.SteamId64, Feature);
-        
-        if (vipTestCount >= vipTest.VipTestCount)
+        // ВАЖНО: это async void - если отсюда вылетит необработанное исключение,
+        // его НЕКОМУ поймать (в отличие от async Task, где исключение уходит в
+        // Task и его можно await/try-catch на вызывающей стороне). Необработанное
+        // исключение из async void в CS# плагине может уронить весь процесс
+        // сервера, поэтому ВСЁ тело метода обёрнуто в try/catch.
+        try
         {
+            var vipTestEndTime = await GetEndTime(steamId.SteamId2);
+            var vipTestCount = _api!.GetPlayerCookie<int>(steamId.SteamId64, Feature);
+
+            if (vipTestCount >= vipTest.VipTestCount)
+            {
+                Server.NextFrame(() =>
+                    _api.PrintToChat(player, _api.GetTranslatedText("viptest.YouCanNoLongerTakeTheVip")));
+                return;
+            }
+
+            if (vipTestEndTime > DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            {
+                var time = DateTimeOffset.FromUnixTimeSeconds(vipTestEndTime) - DateTimeOffset.UtcNow;
+                var timeRemainingFormatted =
+                    $"{(time.Days == 0 ? "" : $"{time.Days}d")} {time.Hours:D2}:{time.Minutes:D2}:{time.Seconds:D2}";
+
+                Server.NextFrame(() =>
+                    _api.PrintToChat(player, _api.GetTranslatedText("viptest.RetakenThrough", timeRemainingFormatted)));
+                return;
+            }
+
+            var coolDownTime = DateTimeOffset.UtcNow.AddSeconds(vipTest.VipTestCooldown).ToUnixTimeSeconds();
+            var endTime = DateTimeOffset.UtcNow.AddSeconds(vipTest.VipTestDuration).ToUnixTimeSeconds();
+
+            await AddUserOrUpdateVipTestAsync(steamId.SteamId2, (int)coolDownTime);
+            _api.SetPlayerCookie(steamId.SteamId64, Feature, vipTestCount + 1);
+
+            var timeRemaining = DateTimeOffset.FromUnixTimeSeconds(endTime) - DateTimeOffset.UtcNow;
+
             Server.NextFrame(() =>
-                _api.PrintToChat(player, _api.GetTranslatedText("viptest.YouCanNoLongerTakeTheVip")));
-            return;
+            {
+                // Игрок мог успеть получить VIP каким-то другим путём, пока шёл
+                // асинхронный запрос к БД выше (другой админ выдал вручную, второй
+                // клик по !viptest и т.п.) - GiveClientVip в этом случае КИДАЕТ
+                // исключение ("Player already has a VIP"). Перепроверяем перед
+                // самим вызовом и просто молча выходим, а не падаем.
+                if (!player.IsValid || _api.IsClientVip(player))
+                {
+                    return;
+                }
+
+                _api.PrintToChat(player,
+                    _api.GetTranslatedText("viptest.SuccessfullyPassed",
+                        timeRemaining.ToString(timeRemaining.Hours > 0 ? @"h\:mm\:ss" : @"m\:ss")));
+
+                try
+                {
+                    _api.GiveClientVip(player, vipTest.VipTestGroup, vipTest.VipTestDuration);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            });
         }
-
-        if (vipTestEndTime > DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+        catch (Exception e)
         {
-            var time = DateTimeOffset.FromUnixTimeSeconds(vipTestEndTime) - DateTimeOffset.UtcNow;
-            var timeRemainingFormatted =
-                $"{(time.Days == 0 ? "" : $"{time.Days}d")} {time.Hours:D2}:{time.Minutes:D2}:{time.Seconds:D2}";
-
-            Server.NextFrame(() =>
-                _api.PrintToChat(player, _api.GetTranslatedText("viptest.RetakenThrough", timeRemainingFormatted)));
-            return;
+            Console.WriteLine(e);
         }
-
-        var coolDownTime = DateTimeOffset.UtcNow.AddSeconds(vipTest.VipTestCooldown).ToUnixTimeSeconds();
-        var endTime = DateTimeOffset.UtcNow.AddSeconds(vipTest.VipTestDuration).ToUnixTimeSeconds();
-
-        await AddUserOrUpdateVipTestAsync(steamId.SteamId2, (int)coolDownTime);
-        _api.SetPlayerCookie(steamId.SteamId64, Feature, vipTestCount + 1);
-
-        var timeRemaining = DateTimeOffset.FromUnixTimeSeconds(endTime) - DateTimeOffset.UtcNow;
-
-        Server.NextFrame(() =>
-        {
-            _api.PrintToChat(player,
-                _api.GetTranslatedText("viptest.SuccessfullyPassed",
-                    timeRemaining.ToString(timeRemaining.Hours > 0 ? @"h\:mm\:ss" : @"m\:ss")));
-            _api.GiveClientVip(player, vipTest.VipTestGroup, vipTest.VipTestDuration);
-        });
     }
 
     private async Task AddUserOrUpdateVipTestAsync(string steamId, int endTime)

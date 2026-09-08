@@ -15,15 +15,23 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VipCoreApi\VipCoreApi.csproj">
-      <!-- VipCoreApi – общий контракт, поставляется из shared/ на сервере -->
-      <Private>true</Private>
+      <!-- VipCoreApi - общий контракт, поставляется из shared/ на сервере.
+           Private ДОЛЖЕН быть false - иначе MSBuild копирует свою копию
+           VipCoreApi.dll прямо в bin/ ядра, и без страховки в CI (которая
+           стирает её из plugins/VIPCore/ постфактум) локальная/ручная сборка
+           получила бы дубликат - два разных CLR-типа IVipCoreApi в разных
+           AssemblyLoadContext, capability между VIPCore и всеми VIP_*-модулями
+           ломается. -->
+      <Private>false</Private>
     </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="MenuManagerApi">
       <HintPath>..\..\RequirmentsApi\MenuManagerApi.dll</HintPath>
-      <Private>true</Private>
+      <!-- Та же причина, что и у VipCoreApi выше - MenuManagerApi.dll тоже
+           общий контракт, должен приходить только из shared/MenuManagerApi/. -->
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
 
