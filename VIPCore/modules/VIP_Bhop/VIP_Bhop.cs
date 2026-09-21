@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
@@ -50,6 +50,15 @@ public class Bhop : VipFeatureBase
         vipBhop.RegisterListener<Listeners.OnClientConnected>(slot => _bhopSettings[slot] = new BhopSettings());
         vipBhop.RegisterListener<Listeners.OnClientDisconnectPost>(slot => _bhopSettings[slot] = new BhopSettings());
 
+        // Игроки, которые уже были на сервере ДО того, как модуль загрузился (hot-reload
+        // плагина/модуля, пока люди онлайн), не получат вызов OnClientConnected, и их
+        // слот в _bhopSettings так и останется null навсегда — OnTick ниже падал с
+        // NullReferenceException на каждом тике именно из-за этого. Заполняем сразу.
+        foreach (var existingPlayer in Utilities.GetPlayers().Where(p => p is { IsValid: true }))
+        {
+            _bhopSettings[existingPlayer.Slot] = new BhopSettings();
+        }
+
         vipBhop.RegisterEventHandler<EventRoundStart>(EventRoundStart);
 
         vipBhop.RegisterListener<Listeners.OnTick>(() =>
@@ -57,7 +66,9 @@ public class Bhop : VipFeatureBase
             foreach (var player in Utilities.GetPlayers()
                          .Where(player => player is { IsValid: true, IsBot: false, PawnIsAlive: true }))
             {
-                var settings = _bhopSettings[player.Slot];
+                // Доп. защита (на случай, если слот всё же не был проинициализирован
+                // каким-то ещё не учтённым путём) — не падаем, а лениво создаём настройки.
+                var settings = _bhopSettings[player.Slot] ??= new BhopSettings();
                 if (!settings.Active || !settings.Enabled) continue;
 
                 OnTick(player);
@@ -68,12 +79,12 @@ public class Bhop : VipFeatureBase
     public override void OnPlayerLoaded(CCSPlayerController player, string group)
     {
         if (PlayerHasFeature(player))
-            _bhopSettings[player.Slot].Enabled = GetPlayerFeatureState(player) == FeatureState.Enabled;
+            (_bhopSettings[player.Slot] ??= new BhopSettings()).Enabled = GetPlayerFeatureState(player) == FeatureState.Enabled;
     }
 
     public override void OnSelectItem(CCSPlayerController player, FeatureState state)
     {
-        _bhopSettings[player.Slot].Enabled = state == FeatureState.Enabled;
+        (_bhopSettings[player.Slot] ??= new BhopSettings()).Enabled = state == FeatureState.Enabled;
     }
 
     private void SetBunnyhop(CCSPlayerController player, bool value)
@@ -110,7 +121,7 @@ public class Bhop : VipFeatureBase
         foreach (var player in Utilities.GetPlayers()
                      .Where(player => player is { IsValid: true, IsBot: false, PawnIsAlive: true }))
         {
-            var settings = _bhopSettings[player.Slot];
+            var settings = _bhopSettings[player.Slot] ??= new BhopSettings();
             if (settings.Enabled)
             {
                 settings.Active = false;
