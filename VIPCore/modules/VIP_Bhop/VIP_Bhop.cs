@@ -54,9 +54,20 @@ public class Bhop : VipFeatureBase
         // плагина/модуля, пока люди онлайн), не получат вызов OnClientConnected, и их
         // слот в _bhopSettings так и останется null навсегда — OnTick ниже падал с
         // NullReferenceException на каждом тике именно из-за этого. Заполняем сразу.
-        foreach (var existingPlayer in Utilities.GetPlayers().Where(p => p is { IsValid: true }))
+        // try/catch — при обычном холодном старте сервера (не hot-reload) Global Variables
+        // движка ещё не инициализированы в момент OnAllPluginsLoaded, и Utilities.GetPlayers()
+        // кидает NativeException; в этом случае игроков всё равно физически ещё нет,
+        // так что просто пропускаем — ронять загрузку всего плагина из-за этого нельзя.
+        try
         {
-            _bhopSettings[existingPlayer.Slot] = new BhopSettings();
+            foreach (var existingPlayer in Utilities.GetPlayers().Where(p => p is { IsValid: true }))
+            {
+                _bhopSettings[existingPlayer.Slot] = new BhopSettings();
+            }
+        }
+        catch (NativeException)
+        {
+            // Global Variables ещё не готовы (холодный старт сервера) — игроков нет, пропускаем.
         }
 
         vipBhop.RegisterEventHandler<EventRoundStart>(EventRoundStart);
