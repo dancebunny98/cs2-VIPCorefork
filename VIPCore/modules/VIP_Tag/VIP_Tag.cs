@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
@@ -48,9 +48,12 @@ public class Tag : VipFeatureBase
 
     public Tag(VIPTag vipTag, IVipCoreApi api) : base(api)
     {
-        vipTag.RegisterListener<Listeners.OnClientConnected>(slot =>
+        // OnClientConnected срабатывает ДО завершения Steam-авторизации - .SteamID в этот
+        // момент может быть ещё невалиден, из-за чего кука с тегом ищется не по тому ID и
+        // тег "сбрасывается". OnClientAuthorized даёт уже проверенный SteamID.
+        vipTag.RegisterListener<Listeners.OnClientAuthorized>((slot, steamId) =>
         {
-            var cookie = GetPlayerCookie<string>(Utilities.GetPlayerFromSlot(slot).SteamID, "player_tag");
+            var cookie = GetPlayerCookie<string>(steamId.SteamId64, "player_tag");
 
             _userSettings[slot + 1] = new UserSettings { Tag = cookie };
         });
@@ -58,6 +61,14 @@ public class Tag : VipFeatureBase
         vipTag.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             var player = @event.Userid;
+
+            // Боты и всё, что не проходило через OnClientAuthorized (не было записи в
+            // _userSettings), не должны обрабатываться здесь - раньше это падало с NRE.
+            if (player is null || !player.IsValid || _userSettings[player.Index] is null)
+            {
+                return HookResult.Continue;
+            }
+
             if (!IsClientVip(player))
             {
                 _userSettings[player.Index]!.Tag = "\0";
