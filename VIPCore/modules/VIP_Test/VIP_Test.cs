@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
@@ -15,7 +15,7 @@ public class VipTest : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Test";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private static readonly string Feature = "vip_test_count";
     private IVipCoreApi? _api;
@@ -148,7 +148,7 @@ public class VipTest : BasePlugin
         try
         {
             await using var dbConnection = new MySqlConnection(_api.GetDatabaseConnectionString);
-            dbConnection.Open();
+            await dbConnection.OpenAsync();
 
             var insertUserQuery = @"
             INSERT INTO `vipcore_test` (`steamid`, `end_time`)
@@ -168,7 +168,7 @@ public class VipTest : BasePlugin
         try
         {
             await using var dbConnection = new MySqlConnection(_api.GetDatabaseConnectionString);
-            dbConnection.Open();
+            await dbConnection.OpenAsync();
 
             var updateCountQuery = @"
             UPDATE `vipcore_test`
@@ -189,7 +189,7 @@ public class VipTest : BasePlugin
         try
         {
             await using var dbConnection = new MySqlConnection(_api.GetDatabaseConnectionString);
-            dbConnection.Open();
+            await dbConnection.OpenAsync();
     
             var result = await dbConnection.QuerySingleOrDefaultAsync<long>(@"
             SELECT `end_time` FROM `vipcore_test` WHERE `steamid` = @SteamId;",
@@ -209,14 +209,14 @@ public class VipTest : BasePlugin
         try
         {
             await using var dbConnection = new MySqlConnection(_api.GetDatabaseConnectionString);
-            dbConnection.Open();
+            await dbConnection.OpenAsync();
 
             var checkUserQuery = @"
             SELECT COUNT(*)
             FROM `vipcore_test`
             WHERE `steamid` = @SteamId;";
 
-            var count = dbConnection.ExecuteScalarAsync<int>(checkUserQuery, new { SteamId = steamId }).Result;
+            var count = await dbConnection.ExecuteScalarAsync<int>(checkUserQuery, new { SteamId = steamId });
 
             return count > 0;
         }
@@ -229,10 +229,21 @@ public class VipTest : BasePlugin
 
     private async Task CreateVipTestTable()
     {
+        // БД может быть недоступна в момент загрузки модуля - пробуем несколько раз с растущей паузой.
+        for (var attempt = 1; attempt <= 12; attempt++)
+        {
+            if (await TryCreateVipTestTable()) return;
+
+            await Task.Delay(TimeSpan.FromSeconds(Math.Min(30, 2 * attempt)));
+        }
+    }
+
+    private async Task<bool> TryCreateVipTestTable()
+    {
         try
         {
             await using var dbConnection = new MySqlConnection(_api.GetDatabaseConnectionString);
-            dbConnection.Open();
+            await dbConnection.OpenAsync();
 
             var createKeysTable = @"
             CREATE TABLE IF NOT EXISTS `vipcore_test` (
@@ -241,10 +252,12 @@ public class VipTest : BasePlugin
             );";
 
             await dbConnection.ExecuteAsync(createKeysTable);
+            return true;
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+            return false;
         }
     }
 

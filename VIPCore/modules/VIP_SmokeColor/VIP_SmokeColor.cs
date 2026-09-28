@@ -9,7 +9,7 @@ public class VipSmokeColor : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Smoke Color";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
 
     private SmokeColor _smokeColor;

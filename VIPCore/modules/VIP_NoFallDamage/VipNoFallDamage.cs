@@ -11,7 +11,7 @@ public class VipNoFallDamage : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] No Fall Damage";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private NoFallDamage _noFallDamage;

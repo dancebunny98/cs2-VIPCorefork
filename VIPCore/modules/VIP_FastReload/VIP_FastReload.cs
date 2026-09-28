@@ -9,7 +9,7 @@ public class VIPFastReload : BasePlugin
 {
     public override string ModuleAuthor => "T3Marius";
     public override string ModuleName => "[VIP] FastReload";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private FastReload? _fastReloadFeature;

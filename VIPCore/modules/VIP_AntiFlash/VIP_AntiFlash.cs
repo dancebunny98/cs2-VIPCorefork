@@ -9,7 +9,7 @@ public class VipAntiFlash : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Anti Flash";
-    public override string ModuleVersion => "v1.0.3";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
    
     private IVipCoreApi? _api;
     private AntiFlash? _antiFlash;

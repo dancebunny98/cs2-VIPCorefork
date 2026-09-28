@@ -9,7 +9,7 @@ public class VipKillScreen : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Kill Screen";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private KillScreen _killScreen;
     private IVipCoreApi? _api;

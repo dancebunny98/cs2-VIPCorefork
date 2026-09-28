@@ -14,7 +14,7 @@ public class VipWeaponsMenu : BasePlugin
 {
     public override string ModuleAuthor => "daffyy";
     public override string ModuleName => "[VIP] WeaponsMenu";
-    public override string ModuleVersion => "v1.0.2";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     
     private WeaponsMenu _weaponsMenu;
     private IVipCoreApi? _api;
@@ -115,7 +115,7 @@ public class WeaponsMenu : VipFeatureBase
 
     private void CreateMenu(CCSPlayerController player)
     {
-        if (!player.PawnIsAlive || player.PlayerPawn.Value == null || player.Connected != PlayerConnectedState.PlayerConnected)
+        if (!player.PawnIsAlive || player.PlayerPawn.Value == null || player.Connected != PlayerConnectedState.Connected)
             return;
 
         if (GetPlayerSelection(player, out var selection) && selection != null)

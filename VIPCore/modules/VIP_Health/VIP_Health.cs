@@ -10,7 +10,7 @@ public class VipHealth : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Health";
-    public override string ModuleVersion => "v1.0.2";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private Health _health;

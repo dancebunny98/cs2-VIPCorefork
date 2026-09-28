@@ -10,7 +10,7 @@ public class VipResetDeaths : BasePlugin
 {
     public override string ModuleAuthor => "WodiX";
     public override string ModuleName => "[VIP] ResetDeaths";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private ResetDeaths _resetDeaths;
     private IVipCoreApi? _api;

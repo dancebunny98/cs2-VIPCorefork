@@ -8,7 +8,7 @@ public class VipHealthshot : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Healthshot";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     
     private Healthshot _healthshot;
     private IVipCoreApi? _api;

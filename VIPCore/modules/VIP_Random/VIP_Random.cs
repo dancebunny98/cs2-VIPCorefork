@@ -11,7 +11,7 @@ public class VIP_Random : BasePlugin
     public override string ModuleName => "[VIP] Random";
     public override string ModuleAuthor => "T3Marius";
     public override string ModuleDescription => "After x rounds from the map start, select random VIP.";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _vipApi;
     private Config _config = null!;
@@ -136,7 +136,7 @@ public class VIP_Random : BasePlugin
     private CCSPlayerController? GetRandomPlayer()
     {
         var players = Utilities.GetPlayers()
-            .Where(p => p != null && p.IsValid && p.PlayerPawn != null && p.PlayerPawn.IsValid && !p.IsBot && !p.IsHLTV && p.Connected == PlayerConnectedState.PlayerConnected)
+            .Where(p => p != null && p.IsValid && p.PlayerPawn != null && p.PlayerPawn.IsValid && !p.IsBot && !p.IsHLTV && p.Connected == PlayerConnectedState.Connected)
             .ToList();
         if (players.Count == 0) return null;
         var rand = new Random();

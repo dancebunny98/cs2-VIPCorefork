@@ -9,7 +9,7 @@ public class VipInfiniteAmmo : BasePlugin
 {
 	public override string ModuleAuthor => "panda";
 	public override string ModuleName => "[VIP] Infinite Ammo";
-	public override string ModuleVersion => "v1.1";
+	public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
 	private IVipCoreApi? _api;
 	private InfiniteAmmo? _infiniteAmmoFeature;

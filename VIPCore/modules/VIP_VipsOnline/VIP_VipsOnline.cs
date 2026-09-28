@@ -14,7 +14,7 @@ public class VIPVipsOnline : BasePlugin
 {
     public override string ModuleAuthor => "panda";
     public override string ModuleName => "[VIP] Vips Online";
-    public override string ModuleVersion => "v1.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     private IVipCoreApi? _api;
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 

@@ -13,7 +13,7 @@ public class VIPTag : BasePlugin
 {
     public override string ModuleAuthor => "Toil";
     public override string ModuleName => "[VIP] Tag";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private Tag _tag;

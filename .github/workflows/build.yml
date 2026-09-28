@@ -1,5 +1,12 @@
 name: Build VIPCore
 
+# Версии, TFM, .NET SDK и номер сборки НЕ задаются здесь:
+#   - версии/TFM/зависимости  -> VIPCore/Versions.props (единственное место)
+#   - номер сборки            -> github.run_number (передаётся в dotnet build как -p:BuildNumber)
+# Итоговая версия каждого запуска: v<PluginVersion>+build.<run_number>
+
+run-name: VIPCore ${{ github.ref_name }} #${{ github.run_number }}
+
 on:
   push:
     branches: [ main ]
@@ -38,27 +45,96 @@ jobs:
           echo "No committed build/ output files found (README.md inside build/ is allowed)."
 
   # ------------------------------------------------------------------
-  # 1) Сборка VipCoreApi (shared)
+  # 1) Чтение версий из VIPCore/Versions.props + автообнаружение модулей
+  # ------------------------------------------------------------------
+  prepare:
+    name: Read versions (Versions.props)
+    runs-on: ubuntu-latest
+    needs: no-tracked-build-output
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      build: ${{ steps.v.outputs.build }}
+      full: ${{ steps.v.outputs.full }}
+      tfm: ${{ steps.v.outputs.tfm }}
+      dotnet: ${{ steps.v.outputs.dotnet }}
+      modules: ${{ steps.m.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read Versions.props
+        id: v
+        run: |
+          set -e
+          f=VIPCore/Versions.props
+          get() { sed -n "s:.*<$1>\(.*\)</$1>.*:\1:p" "$f" | head -n1 | tr -d '[:space:]'; }
+
+          version=$(get PluginVersion)
+          tfm=$(get DotNetTargetFramework)
+          dotnet=$(get DotNetSdkVersion)
+          build="${{ github.run_number }}"
+
+          for pair in "PluginVersion=$version" "DotNetTargetFramework=$tfm" "DotNetSdkVersion=$dotnet"; do
+            if [ -z "${pair#*=}" ]; then
+              echo "::error file=$f::${pair%%=*} is missing or empty in $f"
+              exit 1
+            fi
+          done
+
+          full="v${version}+build.${build}"
+          {
+            echo "version=$version"
+            echo "build=$build"
+            echo "full=$full"
+            echo "tfm=$tfm"
+            echo "dotnet=$dotnet"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## VIPCore $full"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| Plugin version | \`$version\` |"
+            echo "| Build number | \`$build\` |"
+            echo "| Target framework | \`$tfm\` |"
+            echo "| .NET SDK | \`$dotnet\` |"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Discover modules
+        id: m
+        run: |
+          set -e
+          # Модуль = папка VIPCore/modules/<Name>/ с <Name>.csproj и хотя бы одним .cs.
+          # Новые модули подхватываются автоматически - список вручную вести не нужно.
+          modules=$(for d in VIPCore/modules/*/; do
+            n=$(basename "$d")
+            if [ -f "$d$n.csproj" ] && ls "$d"*.cs >/dev/null 2>&1; then echo "\"$n\""; fi
+          done | paste -sd, -)
+          modules="[$modules]"
+          echo "Modules: $modules"
+          echo "modules=$modules" >> "$GITHUB_OUTPUT"
+
+  # ------------------------------------------------------------------
+  # 2) Сборка VipCoreApi (shared)
   # ------------------------------------------------------------------
   build-vipcoreapi:
     name: Build VipCoreApi
     runs-on: ubuntu-latest
-    needs: no-tracked-build-output
+    needs: prepare
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ needs.prepare.outputs.dotnet }}
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VipCoreApi/VipCoreApi.csproj
-          dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore
+          dotnet build VIPCore/VipCoreApi/VipCoreApi.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:BuildNumber=${{ needs.prepare.outputs.build }}
       - name: Collect output
         run: |
           set -e
           SHARED_OUT="out/addons/counterstrikesharp/shared/VipCoreApi"
           mkdir -p "$SHARED_OUT"
-          BIN="VIPCore/VipCoreApi/bin/${{ env.CONFIGURATION }}/net8.0"
+          BIN="VIPCore/VipCoreApi/bin/${{ env.CONFIGURATION }}/${{ needs.prepare.outputs.tfm }}"
           cp "$BIN/VipCoreApi.dll" "$SHARED_OUT/"
           [ -f "$BIN/VipCoreApi.pdb" ] && cp "$BIN/VipCoreApi.pdb" "$SHARED_OUT/"
           find out -type f
@@ -69,13 +145,13 @@ jobs:
           if-no-files-found: error
 
   # ------------------------------------------------------------------
-  # 2) Копирование MenuManagerApi.dll в shared/ (если есть)
+  # 3) Копирование MenuManagerApi.dll в shared/ (если есть)
   #    Файл ищется в RequirmentsApi/ или корне
   # ------------------------------------------------------------------
   copy-menumanagerapi:
     name: Copy MenuManagerApi to shared
     runs-on: ubuntu-latest
-    needs: no-tracked-build-output
+    needs: prepare
     steps:
       - uses: actions/checkout@v5
       - name: Copy MenuManagerApi.dll
@@ -100,28 +176,28 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------------
-  # 3) Сборка VIPCore (ядро)
+  # 4) Сборка VIPCore (ядро)
   #    Копируются все приватные зависимости, общие контракты удаляются.
   # ------------------------------------------------------------------
   build-vipcore:
     name: Build VIPCore
     runs-on: ubuntu-latest
-    needs: [build-vipcoreapi, copy-menumanagerapi]
+    needs: [prepare, build-vipcoreapi, copy-menumanagerapi]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ needs.prepare.outputs.dotnet }}
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VIPCore/VIPCore.csproj
-          dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore
+          dotnet build VIPCore/VIPCore/VIPCore.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:BuildNumber=${{ needs.prepare.outputs.build }}
       - name: Collect output
         run: |
           set -e
           PLUGIN_OUT="out/addons/counterstrikesharp/plugins/VIPCore"
           mkdir -p "$PLUGIN_OUT"
-          BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/net8.0"
+          BIN="VIPCore/VIPCore/bin/${{ env.CONFIGURATION }}/${{ needs.prepare.outputs.tfm }}"
 
           # Копируем все .dll и .pdb из папки сборки
           find "$BIN" -maxdepth 1 \( -name "*.dll" -o -name "*.pdb" \) -exec cp {} "$PLUGIN_OUT"/ \;
@@ -145,79 +221,30 @@ jobs:
           if-no-files-found: error
 
   # ------------------------------------------------------------------
-  # 4) Сборка всех модулей VIP_* (лежат в VIPCore/modules/)
+  # 5) Сборка всех модулей VIP_* (список строится автоматически в job prepare)
   #    Каждый модуль собирается отдельно, сбой одного не останавливает другие.
   # ------------------------------------------------------------------
   build-modules:
     name: Build ${{ matrix.module }}
     runs-on: ubuntu-latest
-    needs: [build-vipcoreapi, copy-menumanagerapi]
+    needs: [prepare, build-vipcoreapi, copy-menumanagerapi]
     strategy:
       fail-fast: false
       matrix:
-        module:
-          - VIP_AntiFlash
-          - VIP_Armor
-          - VIP_Bhop
-          - VIP_BuyTeamWeapon
-          - VIP_CustomDefaultAmmo
-          - VIP_DamageChange
-          - VIP_DecoyTeleport
-          - VIP_DefuseKit
-          - VIP_Defuser
-          - VIP_Endurance
-          - VIP_FastDefuse
-          - VIP_FastPlant
-          - VIP_FastReload
-          - VIP_Flags
-          - VIP_Fov
-          - VIP_Gifts
-          - VIP_Gravity
-          - VIP_Grenades
-          - VIP_Health
-          - VIP_Healthshot
-          - VIP_InfiniteAmmo
-          - VIP_Items
-          - VIP_Jumps
-          - VIP_KillScreen
-          - VIP_Money
-          - VIP_NightVip
-          - VIP_NoFallDamage
-          - VIP_RainbowModel
-          - VIP_Random
-          - VIP_RegenArmor
-          - VIP_RegenHealth
-          - VIP_ResetDeaths
-          - VIP_Respawn
-          - VIP_ShowDamage
-          - VIP_SmokeColor
-          - VIP_Speed
-          - VIP_Tag
-          - VIP_TeammatesHeal
-          - VIP_Test
-          - VIP_Vampirism
-          - VIP_VipsOnline
-          - VIP_WeaponsMenu
-          - VIP_Zeus
-          # VIP_GunsPack отсутствует, поэтому не включён
-          # VIP_ExperienceMultiplier – отдельно ниже
+        module: ${{ fromJson(needs.prepare.outputs.modules) }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ needs.prepare.outputs.dotnet }}
       - name: Restore & build
         id: build
         continue-on-error: true
         run: |
           set -e
           PROJ="VIPCore/modules/${{ matrix.module }}/${{ matrix.module }}.csproj"
-          if [ ! -f "$PROJ" ]; then
-            echo "::warning::$PROJ not found, skipping"
-            exit 0
-          fi
           dotnet restore "$PROJ"
-          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore
+          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore -p:BuildNumber=${{ needs.prepare.outputs.build }}
       - name: Collect output
         if: steps.build.outcome == 'success'
         run: |
@@ -260,36 +287,13 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------------
-  # 5) VIP_ExperienceMultiplier – опционально (может требовать RanksApi)
-  # ------------------------------------------------------------------
-  build-experience-multiplier:
-    name: Build VIP_ExperienceMultiplier (optional)
-    runs-on: ubuntu-latest
-    needs: [build-vipcoreapi, copy-menumanagerapi]
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '8.0.x'
-      - name: Restore & build
-        run: |
-          PROJ="VIPCore/modules/VIP_ExperienceMultiplier/VIP_ExperienceMultiplier.csproj"
-          if [ ! -f "$PROJ" ]; then
-            echo "::warning::$PROJ not found, skipping"
-            exit 0
-          fi
-          dotnet restore "$PROJ" || true
-          dotnet build "$PROJ" -c ${{ env.CONFIGURATION }} --no-restore || true
-
-  # ------------------------------------------------------------------
-  # 6) Финальный артефакт – объединяем всё из загруженных артефактов
+  # 6) Финальный артефакт: VIPCore-v<версия>-build<номер>
   # ------------------------------------------------------------------
   final-artifact:
     name: Merge and upload final VIPCore build
     runs-on: ubuntu-latest
-    needs: [build-vipcore, build-modules, build-experience-multiplier]
-    if: always()
+    needs: [prepare, build-vipcore, build-modules]
+    if: always() && needs.prepare.result == 'success' && needs.build-vipcore.result == 'success'
     steps:
       - name: Download all built components
         uses: actions/download-artifact@v6
@@ -298,21 +302,23 @@ jobs:
       - name: Merge into one structure
         run: |
           mkdir -p final/addons/counterstrikesharp
-          for dir in artifacts/*/out; do
-            if [ -d "$dir" ]; then
-              cp -r "$dir"/* final/ 2>/dev/null || true
-            fi
-          done
           for dir in artifacts/*/addons; do
             if [ -d "$dir" ]; then
               cp -r "$dir"/* final/addons/ 2>/dev/null || true
             fi
           done
+          cat > final/VERSION.txt <<EOT
+          VIPCore ${{ needs.prepare.outputs.full }}
+          plugin version : ${{ needs.prepare.outputs.version }}
+          build number   : ${{ needs.prepare.outputs.build }}
+          target         : ${{ needs.prepare.outputs.tfm }}
+          commit         : ${{ github.sha }}
+          EOT
           echo "Final structure:"
           find final -type f
       - name: Upload final artifact
         uses: actions/upload-artifact@v6
         with:
-          name: VIPCore-${{ github.sha }}
+          name: VIPCore-v${{ needs.prepare.outputs.version }}-build${{ needs.prepare.outputs.build }}
           path: final/
           if-no-files-found: error

@@ -11,7 +11,7 @@ public class VipTeammatesHeal : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Teammates Heal";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private TeammatesHeal? _flags;

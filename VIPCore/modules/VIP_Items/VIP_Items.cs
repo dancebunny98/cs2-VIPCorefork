@@ -8,7 +8,7 @@ public class VipItems : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Items";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private Items _items = null!;
     private IVipCoreApi? _api;

@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
@@ -20,7 +20,7 @@ public class VipCore : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Core";
-    public override string ModuleVersion => "v1.3.3";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     public Config Config { get; set; } = null!;
     public CoreConfig CoreConfig { get; set; } = null!;
@@ -60,7 +60,10 @@ public class VipCore : BasePlugin
         DbConnectionString = BuildConnectionString();
         Database = new Database(this, Logger, DbConnectionString);
 
-        Task.Run(() => Database.CreateTable());
+        // Подключение к БД идёт в фоне с автоповторами - загрузка плагина не блокируется
+        // и не зависит от того, доступна ли БД в этот момент.
+        Database.ConnectionEstablished += OnDatabaseConnectionEstablished;
+        Database.Start();
 
         RegisterEventHandlers();
         SetupTimers();
@@ -109,7 +112,13 @@ public class VipCore : BasePlugin
             Task.Run(() => OnClientAuthorizedAsync(player, id));
         });
 
-        RegisterListener<Listeners.OnMapStart>(_ => VipApi.LoadCookies());
+        RegisterListener<Listeners.OnMapStart>(_ =>
+        {
+            VipApi.LoadCookies();
+
+            // После смены карты соединение могло «протухнуть» - проверяем сразу, не дожидаясь таймера.
+            Database.RequestCheck();
+        });
         RegisterListener<Listeners.OnMapEnd>(() => VipApi.SaveCookies());
         RegisterEventHandler<EventServerShutdown>((@event, info) =>
         {
@@ -159,7 +168,7 @@ public class VipCore : BasePlugin
 
         AddTimer(Config.Delay, () =>
         {
-            if (player.Connected != PlayerConnectedState.PlayerConnected) return;
+            if (player.Connected != PlayerConnectedState.Connected) return;
 
             try
             {
@@ -178,17 +187,69 @@ public class VipCore : BasePlugin
     {
         AddTimer(300.0f, () =>
         {
-            foreach (var player in Utilities.GetPlayers()
-                         .Where(player => player.IsValid))
+            var players = new List<(CCSPlayerController Player, SteamID Id)>();
+
+            foreach (var player in Utilities.GetPlayers().Where(player => player.IsValid))
             {
                 var authId = player.AuthorizedSteamID;
                 if (authId == null) continue;
 
-                Task.Run(() => Database.RemoveExpiredUsers(player, authId));
-
+                players.Add((player, authId));
                 IsClientVip[player.Slot] = IsUserActiveVip(player);
             }
+
+            // Раньше здесь создавалась отдельная задача (и соединение) на КАЖДОГО игрока одновременно.
+            // Теперь одна фоновая задача обходит игроков по очереди; если БД недоступна - пропускаем цикл.
+            if (players.Count == 0 || !Database.IsAvailable) return;
+
+            Task.Run(async () =>
+            {
+                foreach (var (player, id) in players)
+                    await Database.RemoveExpiredUsers(player, id);
+            });
         }, TimerFlags.REPEAT);
+    }
+
+    private void OnDatabaseConnectionEstablished()
+    {
+        // Вызывается из фонового потока. Игроки, подключившиеся пока БД была недоступна,
+        // остались без VIP - подгружаем их сейчас.
+        Server.NextFrame(() =>
+        {
+            var pending = new List<(CCSPlayerController Player, SteamID Id)>();
+
+            foreach (var player in Utilities.GetPlayers())
+            {
+                if (!player.IsValid || player.IsBot || player.IsHLTV) continue;
+
+                var authId = player.AuthorizedSteamID;
+                if (authId == null || Users.ContainsKey(authId.SteamId64)) continue;
+
+                pending.Add((player, authId));
+            }
+
+            if (pending.Count == 0) return;
+
+            Task.Run(async () =>
+            {
+                foreach (var (player, id) in pending)
+                    await OnClientAuthorizedAsync(player, id);
+            });
+        });
+    }
+
+    [RequiresPermissions("@css/root")]
+    [ConsoleCommand("css_vip_dbstatus", "Shows VIP database connection status (and forces a re-check)")]
+    public void OnCommandDbStatus(CCSPlayerController? controller, CommandInfo command)
+    {
+        ReplyToCommand(controller, $"[VIP] Database: {Database.StatusText}");
+        Database.RequestCheck();
+    }
+
+    public override void Unload(bool hotReload)
+    {
+        Database.ConnectionEstablished -= OnDatabaseConnectionEstablished;
+        Database.Dispose();
     }
 
     public async Task OnClientAuthorizedAsync(CCSPlayerController player, SteamID steamId)
@@ -393,6 +454,8 @@ public class VipCore : BasePlugin
     public void OnCommandReloadConfig(CCSPlayerController? controller, CommandInfo command)
     {
         LoadConfig();
+        DbConnectionString = BuildConnectionString();
+        Database.UpdateConnectionString(DbConnectionString);
 
         const string msg = "configuration successfully rebooted!";
 
@@ -481,9 +544,37 @@ public class VipCore : BasePlugin
     }
 
 
-    private string BuildConnectionString()
+    /// <summary>
+    /// Читает vip_core.json с диска и возвращает строку подключения, если файл читается.
+    /// Не трогает CoreConfig - используется базой данных, чтобы подхватить исправленные
+    /// логин/пароль/хост без перезагрузки сервера. При любой ошибке возвращает null.
+    /// </summary>
+    public string? TryReadConnectionStringFromDisk()
     {
-        var connection = CoreConfig.Connection;
+        try
+        {
+            var path = Path.Combine(VipApi.CoreConfigDirectory, "vip_core.json");
+            if (!File.Exists(path)) return null;
+
+            var config = System.Text.Json.JsonSerializer.Deserialize<CoreConfig>(File.ReadAllText(path),
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                });
+
+            return config == null ? null : BuildConnectionString(config.Connection, config.DbMaxPoolSize);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string BuildConnectionString() => BuildConnectionString(CoreConfig.Connection, CoreConfig.DbMaxPoolSize);
+
+    private static string BuildConnectionString(VipDb connection, int maxPoolSize)
+    {
         var builder = new MySqlConnectionStringBuilder
         {
             Database = connection.Database,
@@ -493,11 +584,16 @@ public class VipCore : BasePlugin
             Port = (uint)connection.Port,
             Pooling = true,
             MinimumPoolSize = 0,
-            MaximumPoolSize = 640,
+            MaximumPoolSize = (uint)Math.Clamp(maxPoolSize, 1, 1000),
             ConnectionIdleTimeout = 30
         };
 
-        Console.WriteLine("OK!");
+        // Короткий таймаут подключения, чтобы недоступная БД не вешала запросы надолго;
+        // ConnectionReset очищает состояние соединения при возврате в пул.
+        builder.ConnectionTimeout = 10;
+        builder.ConnectionReset = true;
+        builder.ConnectionLifeTime = 300;
+
         return builder.ConnectionString;
     }
 
@@ -535,7 +631,7 @@ public class VipCore : BasePlugin
         if (controller != null)
             PrintToChat(controller, msg);
         else
-            PrintLogInfo($"{msg}");
+            Console.WriteLine(msg);
     }
 
     public void PrintToChat(CCSPlayerController player, string msg)

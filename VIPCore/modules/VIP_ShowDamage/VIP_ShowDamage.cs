@@ -11,7 +11,7 @@ public class VIP_ShowDamage : BasePlugin
 {
     public override string ModuleAuthor => "GSM-RO";
     public override string ModuleName => "[VIP] ShowDamage";
-    public override string ModuleVersion => "1.0.2";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     public override string ModuleDescription => "Shows damage dealt to enemies in the center text for VIP players + optional sound";
 
     private ShowDamageFeature? _feature;

@@ -10,7 +10,7 @@ public class VipRegenHealth : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Health Regeneration";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private RegenHealth _regenHealth; 
     private IVipCoreApi? _api;

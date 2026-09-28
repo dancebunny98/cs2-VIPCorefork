@@ -39,6 +39,20 @@ public class CoreConfig
     public bool ReOpenMenuAfterItemClick { get; init; } = false;
     public bool VipLogging { get; init; } = true;
 
+    // --- Устойчивость к потере связи с БД ---
+    // Как часто (сек) проверять живое соединение с БД (SELECT 1).
+    public int DbHealthCheckInterval { get; init; } = 30;
+    // Пауза перед первой повторной попыткой подключения (сек), затем удваивается.
+    public int DbRetryInitialDelay { get; init; } = 2;
+    // Максимальная пауза между попытками подключения (сек).
+    public int DbRetryMaxDelay { get; init; } = 30;
+    // Сколько секунд ждать восстановления БД при записи (выдача/удаление VIP). 0 - не ждать.
+    public int DbOperationWait { get; init; } = 10;
+    // Максимум соединений в пуле (общий для ядра и модулей). Должен быть заметно меньше max_connections MySQL.
+    public int DbMaxPoolSize { get; init; } = 20;
+    // Сколько запросов ядро выполняет к БД одновременно; остальные ждут в очереди, а не открывают новые соединения.
+    public int DbMaxConcurrency { get; init; } = 8;
+
     public VipDb Connection { get; init; } = new()
     {
         Host = "HOST",

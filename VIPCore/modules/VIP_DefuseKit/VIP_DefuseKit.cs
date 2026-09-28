@@ -10,7 +10,7 @@ public class VIP_DefuseKit : BasePlugin
 {
     public override string ModuleAuthor => "T3Marius";
     public override string ModuleName => "[VIP] DefuseKit";
-    public override string ModuleVersion => "1.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     private IVipCoreApi? VIP_API;
     private DefuseKit? defuseKit;
     private PluginCapability<IVipCoreApi> pluginCapabilty { get; } = new("vipcore:core");

@@ -1,5 +1,22 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)Versions.props" />
+
+  <!-- Общие настройки всех проектов (раньше дублировались в каждом .csproj). -->
   <PropertyGroup>
+    <TargetFramework>$(DotNetTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
     <NoWarn>CS8618;CS8602;CS8604;CS8625;CS0169;CS0649</NoWarn>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <!-- Версия проекта: ядро и API - PluginVersion, модули VIP_* - ModulesVersion или личный override. -->
+  <PropertyGroup>
+    <VersionPrefix>$(PluginVersion)</VersionPrefix>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(MSBuildProjectName.StartsWith('VIP_'))">
+    <VersionPrefix>$(ModulesVersion)</VersionPrefix>
+    <_ModuleOverride>$([System.Text.RegularExpressions.Regex]::Replace(';$(ModuleVersionOverrides);', '.*;$(MSBuildProjectName)=([^;]*);.*|.*', '$1'))</_ModuleOverride>
+    <VersionPrefix Condition="'$(_ModuleOverride)' != ''">$(_ModuleOverride)</VersionPrefix>
   </PropertyGroup>
 </Project>

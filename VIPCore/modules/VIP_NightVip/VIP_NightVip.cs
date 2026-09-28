@@ -29,7 +29,7 @@ public class VIP_NightVip : BasePlugin
 {
     public override string ModuleAuthor => "panda.";
     public override string ModuleName => "[VIP] Night VIP";
-    public override string ModuleVersion => "v1.3";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     public override string ModuleDescription => "Gives VIP between a certain period of time.";
 
     private IVipCoreApi? _api;

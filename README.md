@@ -4,6 +4,28 @@
 
 #### If you find an error or anything else. Please message me in discord: thesamefabius
 
+## Requirements
+.NET 10 / CounterStrikeSharp **v1.0.376+** (use the `with-runtime` build). All projects target `net10.0`.
+
+## Database connection
+The plugin never blocks or fails loading because of the database. It connects in the background, retrying with a growing pause until it succeeds, then creates the tables and loads VIPs of players who are already on the server. While the server runs, the connection is checked every `DbHealthCheckInterval` seconds and immediately on every map change; if it is lost, the pool is reset and reconnection starts automatically. Queries that fail on a dropped connection are retried once. Writes (give/update/remove VIP) never get lost: while the DB is down they are queued in memory (up to 5000) and applied in order right after the connection is back. If the connection settings in `vip_core.json` are fixed while the plugin is retrying, they are picked up automatically - no `css_vip_reload` and no restart needed. Players who joined while the DB was down receive their VIP as soon as it returns.
+
+## Versioning & build
+Everything version-related lives in **one file: [`VIPCore/Versions.props`](VIPCore/Versions.props)**:
+
+| Property | What it controls |
+|---|---|
+| `DotNetTargetFramework` / `DotNetSdkVersion` | Target framework of every project / .NET SDK installed by GitHub Actions |
+| `PluginVersion` | Version of VIPCore and VipCoreApi |
+| `ModulesVersion` | Default version of all `VIP_*` modules (by default = `PluginVersion`) |
+| `ModuleVersionOverrides` | Optional per-module versions, e.g. `VIP_Bhop=1.0.3;VIP_Speed=1.1` |
+| `CssApiVersion`, `DapperVersion`, `MySqlConnectorVersion` | NuGet dependency versions (Central Package Management, `Directory.Packages.props`) |
+| `BuildNumber` | `0` locally; GitHub Actions passes `github.run_number` |
+
+No `.csproj`, `.cs` or workflow file needs to be touched when bumping anything. The version is embedded into the DLLs (`AssemblyVersion` = `X.Y.Z.0`, `FileVersion` = `X.Y.Z.<build>`, `InformationalVersion` = `X.Y.Z+build.<build>`) and shown as `ModuleVersion` in `css_plugins list` (e.g. `v1.3.3+build.42`).
+
+GitHub Actions reads `Versions.props`, discovers modules automatically (any `VIPCore/modules/<Name>/<Name>.csproj` with `.cs` files) and publishes the final artifact as **`VIPCore-v<PluginVersion>-build<run_number>`** (with a `VERSION.txt` inside). Local build with a custom number: `dotnet build -c Release -p:BuildNumber=123`.
+
 ## Installation
 1. Install [CounterStrike Sharp](https://github.com/roflmuffin/CounterStrikeSharp), [Metamod:Source](https://www.sourcemm.net/downloads.php/?branch=master)
 and fix WASD menu [MenuManagerCS2Firk](https://github.com/Stimayk/MenuManagerCS2/releases)
@@ -20,6 +42,7 @@ and fix WASD menu [MenuManagerCS2Firk](https://github.com/Stimayk/MenuManagerCS2
 | **`css_vip_adduser <steamid or accountid> <vipgroup> <time or 0 permanently>`** | Adds a VIP player **(for server console only)** |
 | **`css_vip_updateuser <steamid or accountid> <group or -s> <time or -s>`** | Updates the player's VIP **(for server console only)** |
 | **`css_vip_deleteuser <steamid or accountid>`** | Allows you to delete a player by SteamID identifier **(for server console only)** |
+| **`css_vip_dbstatus`** | Shows the DB connection status and forces a re-check **(`@css/root`)** |
 | **`css_vip`** or **`!vip`** | Opens the VIP menu |
 
 ## Configs
@@ -36,6 +59,12 @@ Located in the folder `addons/counterstrikesharp/configs/plugins/VIPCore`
   "ServerPort": 27015, 		   // default port
   "ReOpenMenuAfterItemClick": true,//Whether to reopen the menu after selecting an item | true - yes | false - no
   "VipLogging": true,	   	   //Whether to log VIPCore | true - yes | false - no
+  "DbHealthCheckInterval": 30,     // How often (sec) to check the DB connection (SELECT 1)
+  "DbRetryInitialDelay": 2,        // First pause (sec) between reconnect attempts, doubles each time
+  "DbRetryMaxDelay": 30,           // Maximum pause (sec) between reconnect attempts
+  "DbMaxPoolSize": 20,             // Max connections in the pool (shared with modules). Keep it well below MySQL max_connections
+  "DbMaxConcurrency": 8,           // Max simultaneous core queries; the rest wait in a queue instead of opening new connections
+  "DbOperationWait": 10,           // How long (sec) writes (give/remove VIP) wait for the DB to come back, 0 = don't wait
   "Connection": {
 	"Host": 	"host",
 	"Database": "database",

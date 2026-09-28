@@ -10,7 +10,7 @@ public class VipEndurance : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Endurance";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
     private IVipCoreApi? _api;

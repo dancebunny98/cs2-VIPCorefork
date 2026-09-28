@@ -8,7 +8,7 @@ public class VipZeus : BasePlugin
 {
     public override string ModuleAuthor => "panda";
     public override string ModuleName => "[VIP] Zeus";
-    public override string ModuleVersion => "v1.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     
     private Zeus? _zeus;
     private IVipCoreApi? _api;

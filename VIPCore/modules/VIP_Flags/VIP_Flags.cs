@@ -17,7 +17,7 @@ public class VipFlags : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Flags";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private Flags _flags;
@@ -72,7 +72,7 @@ public class Flags : VipFeatureBase
 
         timer = _vipFlags.AddTimer(1f, () =>
         {
-            if (!player.IsValid || player.Connected != PlayerConnectedState.PlayerConnected)
+            if (!player.IsValid || player.Connected != PlayerConnectedState.Connected)
                 return;
 
             if (!_flags.ContainsKey(player.SteamID))

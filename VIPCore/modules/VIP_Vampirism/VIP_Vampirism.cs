@@ -10,7 +10,7 @@ public class VipVampirism : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Vampirism";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private Vampirism _vampirism;
     private IVipCoreApi? _api;

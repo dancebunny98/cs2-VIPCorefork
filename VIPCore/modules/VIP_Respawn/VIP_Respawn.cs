@@ -12,7 +12,7 @@ public class VipRespawn : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Respawn";
-    public override string ModuleVersion => "1.0.2";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private Respawn _respawn;
     private IVipCoreApi? _api;

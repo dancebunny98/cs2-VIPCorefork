@@ -7,7 +7,7 @@ public class VipGrenades : BasePlugin
 {
     public override string ModuleAuthor => "panda.";
     public override string ModuleName => "[VIP] Grenades";
-    public override string ModuleVersion => "1.0";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private Grenades _grenades = null!;
     private IVipCoreApi? _api;

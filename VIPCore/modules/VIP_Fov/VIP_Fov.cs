@@ -11,7 +11,7 @@ public class VipFov : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Fov";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     
     private IVipCoreApi? _api;
     private Fov _fov;

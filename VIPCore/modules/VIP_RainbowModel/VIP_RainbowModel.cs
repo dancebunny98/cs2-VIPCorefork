@@ -13,7 +13,7 @@ public class VipRainbowModel : BasePlugin
 {
     public override string ModuleAuthor => "WodiX";
     public override string ModuleName => "[VIP] RainbowModel";
-    public override string ModuleVersion => "v1.0.4";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private RainbowModel _rainbowModel;

@@ -10,7 +10,7 @@ public class VipJumps : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius,GSM-RO";
     public override string ModuleName => "[VIP] Jumps";
-    public override string ModuleVersion => "v1.0.2";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private Jumps? _jumps;

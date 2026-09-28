@@ -12,7 +12,7 @@ public class VipGravity : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Gravity";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private Gravity _gravity;

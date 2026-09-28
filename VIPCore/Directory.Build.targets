@@ -1,0 +1,32 @@
+<Project>
+  <!-- Версии сборки: AssemblyVersion стабильная (без номера сборки, чтобы не ломать привязку
+       VipCoreApi.dll между плагинами), FileVersion и InformationalVersion содержат номер сборки. -->
+  <PropertyGroup>
+    <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).$(BuildNumber)</FileVersion>
+    <InformationalVersion>$(VersionPrefix)+build.$(BuildNumber)</InformationalVersion>
+  </PropertyGroup>
+
+  <!-- Генерирует VipBuild.BuildInfo, чтобы ModuleVersion в коде брался из Versions.props, а не хардкодился. -->
+  <Target Name="GenerateVipBuildInfo" BeforeTargets="CoreCompile;GenerateMSBuildEditorConfigFileShouldRun">
+    <PropertyGroup>
+      <_VipBuildInfoFile>$(IntermediateOutputPath)VipBuildInfo.g.cs</_VipBuildInfoFile>
+      <_VipBuildInfoCode>
+// &lt;auto-generated/&gt; (Directory.Build.targets)
+namespace VipBuild%3B
+
+internal static class BuildInfo
+{
+    public const string Version = "$(VersionPrefix)"%3B
+    public const string Build = "$(BuildNumber)"%3B
+    public const string Full = "v$(VersionPrefix)+build.$(BuildNumber)"%3B
+}
+      </_VipBuildInfoCode>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_VipBuildInfoFile)" Lines="$(_VipBuildInfoCode)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(_VipBuildInfoFile)" />
+      <FileWrites Include="$(_VipBuildInfoFile)" />
+    </ItemGroup>
+  </Target>
+</Project>

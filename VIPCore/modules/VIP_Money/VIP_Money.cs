@@ -11,7 +11,7 @@ public class VipMoney : BasePlugin
 {
     public override string ModuleAuthor => "WodiX";
     public override string ModuleName => "[VIP] Money";
-    public override string ModuleVersion => "v1.0.2";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
 
     private IVipCoreApi? _api;
     private Money _money;

@@ -12,7 +12,7 @@ public class VipDamageChange : BasePlugin
 {
     public override string ModuleAuthor => "panda.";
     public override string ModuleName => "[VIP] Damage Multiplier";
-    public override string ModuleVersion => "v1.1";
+    public override string ModuleVersion => VipBuild.BuildInfo.Full;
     private IVipCoreApi? _api;
     private DamageMultiplier? _damageMultiplier;
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
