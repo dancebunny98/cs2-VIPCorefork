@@ -16,7 +16,7 @@ using static VipCoreApi.IVipCoreApi;
 
 namespace VIPCore;
 
-public class VipCore : BasePlugin
+public partial class VipCore : BasePlugin
 {
     public override string ModuleAuthor => "thesamefabius";
     public override string ModuleName => "[VIP] Core";
@@ -573,30 +573,11 @@ public class VipCore : BasePlugin
 
     private string BuildConnectionString() => BuildConnectionString(CoreConfig.Connection, CoreConfig.DbMaxPoolSize);
 
-    private static string BuildConnectionString(VipDb connection, int maxPoolSize)
-    {
-        var builder = new MySqlConnectionStringBuilder
-        {
-            Database = connection.Database,
-            UserID = connection.User,
-            Password = connection.Password,
-            Server = connection.Host,
-            Port = (uint)connection.Port,
-            Pooling = true,
-            MinimumPoolSize = 0,
-            MaximumPoolSize = (uint)Math.Clamp(maxPoolSize, 1, 1000),
-            ConnectionIdleTimeout = 30
-        };
+    private static string BuildConnectionString(VipDb connection, int maxPoolSize) =>
+        DatabaseConnectionStringBuilder.Build(connection, maxPoolSize);
 
         // Короткий таймаут подключения, чтобы недоступная БД не вешала запросы надолго;
         // ConnectionReset очищает состояние соединения при возврате в пул.
-        builder.ConnectionTimeout = 10;
-        builder.ConnectionReset = true;
-        builder.ConnectionLifeTime = 300;
-
-        return builder.ConnectionString;
-    }
-
     public bool IsPlayerVip(CCSPlayerController player)
     {
         return IsClientVip[player.Slot];
@@ -683,38 +664,4 @@ public class VipCore : BasePlugin
         3 => time * 86400,
         _ => time
     }).GetUnixEpoch();
-}
-
-public class User
-{
-    public int account_id { get; set; }
-    public required string name { get; set; }
-    public int lastvisit { get; set; }
-    public int sid { get; set; }
-    public required string group { get; set; }
-    public int expires { get; set; }
-    public Dictionary<string, FeatureState> FeatureState { get; set; } = new();
-}
-
-public class PlayerCookie
-{
-    public ulong SteamId64 { get; set; }
-    public Dictionary<string, object> Features { get; set; } = new();
-}
-
-public class Feature
-{
-    public FeatureType FeatureType { get; set; }
-    public Action<CCSPlayerController, FeatureState>? OnSelectItem { get; set; }
-}
-
-public static class GetUnixTime
-{
-    public static int GetUnixEpoch(this DateTime dateTime)
-    {
-        var unixTime = dateTime.ToUniversalTime() -
-                       new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        return (int)unixTime.TotalSeconds;
-    }
 }
