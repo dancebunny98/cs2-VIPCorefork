@@ -44,7 +44,7 @@ public class Tag : VipFeatureBase
 {
     public override string Feature => "Tag";
 
-    private readonly UserSettings?[] _userSettings = new UserSettings?[65];
+    private readonly UserSettings?[] _userSettings = new UserSettings?[70];
 
     public Tag(VIPTag vipTag, IVipCoreApi api) : base(api)
     {
@@ -55,7 +55,7 @@ public class Tag : VipFeatureBase
         {
             var cookie = GetPlayerCookie<string>(steamId.SteamId64, "player_tag");
 
-            _userSettings[slot + 1] = new UserSettings { Tag = cookie };
+            _userSettings[slot] = new UserSettings { Tag = cookie ?? "\0" };
         });
 
         vipTag.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
@@ -64,25 +64,34 @@ public class Tag : VipFeatureBase
 
             // Боты и всё, что не проходило через OnClientAuthorized (не было записи в
             // _userSettings), не должны обрабатываться здесь - раньше это падало с NRE.
-            if (player is null || !player.IsValid || _userSettings[player.Index] is null)
+            if (player is null || !player.IsValid || _userSettings[player.Slot] is null)
             {
                 return HookResult.Continue;
             }
 
             if (!IsClientVip(player))
             {
-                _userSettings[player.Index]!.Tag = "\0";
+                _userSettings[player.Slot]!.Tag = "\0";
                 ChangeTag(player);
             }
 
-            _userSettings[player.Index] = null;
+            _userSettings[player.Slot] = null;
             return HookResult.Continue;
         });
     }
 
+    public override void OnPlayerLoaded(CCSPlayerController player, string group)
+    {
+        // OnClientAuthorized is not emitted for players already connected during hot reload.
+        // Loading here also guarantees that the core has loaded the cookie file first.
+        var cookie = GetPlayerCookie<string>(player.SteamID, "player_tag");
+        _userSettings[player.Slot] = new UserSettings { Tag = cookie ?? "\0" };
+        ChangeTag(player);
+    }
+
     public override void OnSelectItem(CCSPlayerController player, FeatureState state)
     {
-        if (_userSettings[player.Index] == null) return;
+        if (_userSettings[player.Slot] == null) return;
 
         var userTag = GetFeatureValue<List<string>>(player);
 
@@ -92,19 +101,19 @@ public class Tag : VipFeatureBase
 
         menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
         {
-            _userSettings[player.Index]!.Tag = "\0";
+            _userSettings[player.Slot]!.Tag = "\0";
 
             PrintToChat(player, GetTranslatedText("tag.Off"));
             ChangeTag(controller);
-        }, _userSettings[player.Index]!.Tag == "\0");
+        }, _userSettings[player.Slot]!.Tag == "\0");
         foreach (var tag in userTag)
         {
             menu.AddMenuOption(tag, (controller, option) =>
             {
-                _userSettings[player.Index]!.Tag = tag;
+                _userSettings[player.Slot]!.Tag = tag;
                 PrintToChat(player, GetTranslatedText("tag.On", tag));
                 ChangeTag(controller);
-            }, _userSettings[player.Index]!.Tag == tag);
+            }, _userSettings[player.Slot]!.Tag == tag);
         }
 
         menu.Open(player);
@@ -112,19 +121,20 @@ public class Tag : VipFeatureBase
 
     private void ChangeTag(CCSPlayerController player)
     {
-        if (!(player != null && player.IsValid && !player.IsBot && !player.IsHLTV && _userSettings[player.Index]!.Tag != null)) return;
+        if (!(player != null && player.IsValid && !player.IsBot && !player.IsHLTV && _userSettings[player.Slot] != null)) return;
 
-        var tag = _userSettings[player.Index]!.Tag;
+        var tag = _userSettings[player.Slot]!.Tag;
         SetPlayerCookie(player.SteamID, "player_tag", tag);
+        Api.SaveCookies();
         player.Clan = tag;
         Utilities.SetStateChanged(player, "CCSPlayerController", "m_szClan");
     }
 
     public override void OnPlayerSpawn(CCSPlayerController player)
     {
-        if (_userSettings[player.Index] == null) return;
+        if (_userSettings[player.Slot] == null) return;
         if (!PlayerHasFeature(player))
-            _userSettings[player.Index]!.Tag = "\0";
+            _userSettings[player.Slot]!.Tag = "\0";
 
         ChangeTag(player);
     }

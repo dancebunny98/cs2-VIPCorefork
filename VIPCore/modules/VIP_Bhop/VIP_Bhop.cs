@@ -166,6 +166,8 @@ public class Bhop : VipFeatureBase
         var currentVelocity = new Vector(pawn.AbsVelocity.X, pawn.AbsVelocity.Y, pawn.AbsVelocity.Z);
         var currentSpeed = Math.Sqrt(currentVelocity.X * currentVelocity.X + currentVelocity.Y * currentVelocity.Y +
                                      currentVelocity.Z * currentVelocity.Z);
+        if (currentSpeed <= double.Epsilon)
+            return;
 
         pawn.AbsVelocity.X = (float)(currentVelocity.X / currentSpeed) * vel;
         pawn.AbsVelocity.Y = (float)(currentVelocity.Y / currentSpeed) * vel;

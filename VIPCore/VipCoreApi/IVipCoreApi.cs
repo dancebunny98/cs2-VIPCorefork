@@ -176,6 +176,9 @@ public interface IVipCoreApi
     /// <typeparam name="T"></typeparam>
     void SetPlayerCookie<T>(ulong steamId64, string key, T value);
 
+    /// <summary>Persists all player cookies immediately.</summary>
+    void SaveCookies();
+
     /// <summary>
     /// Returns the player's cookie
     /// </summary>

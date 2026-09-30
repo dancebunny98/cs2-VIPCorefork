@@ -56,6 +56,9 @@ public partial class VipCore : BasePlugin
         Server.NextWorldUpdate(() => VipApi.CoreReady());
 
         LoadConfig();
+        // Cookies must be available before the first OnClientAuthorized callback.
+        // MapStart is still kept as a recovery point after map changes.
+        VipApi.LoadCookies();
 
         DbConnectionString = BuildConnectionString();
         Database = new Database(this, Logger, DbConnectionString);
