@@ -20,7 +20,7 @@ public class VipTest : BasePlugin
     private static readonly string Feature = "vip_test_count";
     private IVipCoreApi? _api;
     private Config? _config;
-    private Task? _tableReady;
+    private Task<bool>? _tableReady;
     
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
