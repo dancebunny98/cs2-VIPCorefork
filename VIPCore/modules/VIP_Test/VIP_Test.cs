@@ -33,6 +33,7 @@ public class VipTest : BasePlugin
     }
 
     [ConsoleCommand("css_viptest")]
+    [ConsoleCommand("css_testvip")]
     public void OnCommandVipTest(CCSPlayerController? controller, CommandInfo command)
     {
         if (controller == null) return;
