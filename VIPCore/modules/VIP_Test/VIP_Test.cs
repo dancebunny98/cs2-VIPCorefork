@@ -20,6 +20,7 @@ public class VipTest : BasePlugin
     private static readonly string Feature = "vip_test_count";
     private IVipCoreApi? _api;
     private Config? _config;
+    private Task? _tableReady;
     
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
@@ -28,7 +29,7 @@ public class VipTest : BasePlugin
         _api = PluginCapability.Get();
         if (_api == null) return;
         _config = LoadConfig();
-        Task.Run(CreateVipTestTable);
+        _tableReady = CreateVipTestTable();
     }
 
     [ConsoleCommand("css_viptest")]
@@ -59,10 +60,10 @@ public class VipTest : BasePlugin
 
         if (authorizedSteamId == null) return;
 
-        Task.Run(() => GivePlayerVipTest(controller, authorizedSteamId, _config));
+        _ = GivePlayerVipTest(controller, authorizedSteamId, _config);
     }
 
-    private async void GivePlayerVipTest(CCSPlayerController player, SteamID steamId, Config vipTest)
+    private async Task GivePlayerVipTest(CCSPlayerController player, SteamID steamId, Config vipTest)
     {
         // ВАЖНО: это async void - если отсюда вылетит необработанное исключение,
         // его НЕКОМУ поймать (в отличие от async Task, где исключение уходит в
@@ -71,6 +72,23 @@ public class VipTest : BasePlugin
         // сервера, поэтому ВСЁ тело метода обёрнуто в try/catch.
         try
         {
+            if (_tableReady != null && !await _tableReady)
+            {
+                Server.NextFrame(() => _api?.PrintToChat(player,
+                    "VIP-Test временно недоступен: база данных ещё не готова."));
+                return;
+            }
+
+            var vipGroup = _api!.GetVipGroups()
+                .FirstOrDefault(group => string.Equals(group, vipTest.VipTestGroup,
+                    StringComparison.OrdinalIgnoreCase));
+            if (vipGroup == null)
+            {
+                Server.NextFrame(() => _api.PrintToChat(player,
+                    $"VIP-Test настроен неверно: группа '{vipTest.VipTestGroup}' не найдена."));
+                return;
+            }
+
             var vipTestEndTime = await GetEndTime(steamId.SteamId2);
             var vipTestCount = _api!.GetPlayerCookie<int>(steamId.SteamId64, Feature);
 
@@ -95,8 +113,14 @@ public class VipTest : BasePlugin
             var coolDownTime = DateTimeOffset.UtcNow.AddSeconds(vipTest.VipTestCooldown).ToUnixTimeSeconds();
             var endTime = DateTimeOffset.UtcNow.AddSeconds(vipTest.VipTestDuration).ToUnixTimeSeconds();
 
-            await AddUserOrUpdateVipTestAsync(steamId.SteamId2, (int)coolDownTime);
+            if (!await AddUserOrUpdateVipTestAsync(steamId.SteamId2, (int)coolDownTime))
+            {
+                Server.NextFrame(() => _api?.PrintToChat(player,
+                    "VIP-Test временно недоступен: не удалось сохранить попытку."));
+                return;
+            }
             _api.SetPlayerCookie(steamId.SteamId64, Feature, vipTestCount + 1);
+            _api.SaveCookies();
 
             var timeRemaining = DateTimeOffset.FromUnixTimeSeconds(endTime) - DateTimeOffset.UtcNow;
 
@@ -118,7 +142,7 @@ public class VipTest : BasePlugin
 
                 try
                 {
-                    _api.GiveClientVip(player, vipTest.VipTestGroup, vipTest.VipTestDuration);
+                    _api.GiveClientVip(player, vipGroup, vipTest.VipTestDuration);
                 }
                 catch (Exception e)
                 {
@@ -132,18 +156,15 @@ public class VipTest : BasePlugin
         }
     }
 
-    private async Task AddUserOrUpdateVipTestAsync(string steamId, int endTime)
+    private async Task<bool> AddUserOrUpdateVipTestAsync(string steamId, int endTime)
     {
         if (await IsUserInVipTest(steamId))
-        {
-            await UpdateUserVipTestCount(steamId, endTime);
-            return;
-        }
+            return await UpdateUserVipTestCount(steamId, endTime);
 
-        await AddUserToVipTest(steamId, endTime);
+        return await AddUserToVipTest(steamId, endTime);
     }
 
-    private async Task AddUserToVipTest(string steamId, long endTime)
+    private async Task<bool> AddUserToVipTest(string steamId, long endTime)
     {
         try
         {
@@ -156,14 +177,16 @@ public class VipTest : BasePlugin
 
             await dbConnection.ExecuteAsync(insertUserQuery,
                 new { SteamId = steamId, EndTime = endTime });
+            return true;
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+            return false;
         }
     }
 
-    private async Task UpdateUserVipTestCount(string steamId, long endTime)
+    private async Task<bool> UpdateUserVipTestCount(string steamId, long endTime)
     {
         try
         {
@@ -177,10 +200,12 @@ public class VipTest : BasePlugin
 
             await dbConnection.ExecuteAsync(updateCountQuery,
                 new { SteamId = steamId, EndTime = endTime });
+            return true;
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+            return false;
         }
     }
 
@@ -227,15 +252,17 @@ public class VipTest : BasePlugin
         }
     }
 
-    private async Task CreateVipTestTable()
+    private async Task<bool> CreateVipTestTable()
     {
         // БД может быть недоступна в момент загрузки модуля - пробуем несколько раз с растущей паузой.
         for (var attempt = 1; attempt <= 12; attempt++)
         {
-            if (await TryCreateVipTestTable()) return;
+            if (await TryCreateVipTestTable()) return true;
 
             await Task.Delay(TimeSpan.FromSeconds(Math.Min(30, 2 * attempt)));
         }
+
+        return false;
     }
 
     private async Task<bool> TryCreateVipTestTable()
