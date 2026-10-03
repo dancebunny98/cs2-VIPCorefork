@@ -397,18 +397,19 @@ public class VipCoreApi : IVipCoreApi
 
     public IMenu CreateMenu(string title)
     {
-        // Prefer MenuManagerCS2's WASD button menu when it's installed and enabled.
-        if (_vipCore.CoreConfig.UseWasdMenu && _vipCore.MenuApi != null)
+        // MenuManagerCore owns the menu type and player preference.
+        if (_vipCore.MenuApi != null)
         {
-            return _vipCore.MenuApi.GetMenuForcetype(title, MenuType.PanoramaWasdMenu);
+            // Let MenuManagerCore apply DefaultMenu and the player's saved choice.
+            return _vipCore.MenuApi.GetMenu(title, null, null);
         }
 
-        return _vipCore.CoreConfig.UseCenterHtmlMenu ? new CenterHtmlMenu(title, _vipCore) : new ChatMenu(title);
+        return new CenterHtmlMenu(title, _vipCore);
     }
 
     public void CloseMenu(CCSPlayerController player)
     {
-        if (_vipCore.CoreConfig.UseWasdMenu && _vipCore.MenuApi != null)
+        if (_vipCore.MenuApi != null)
         {
             _vipCore.MenuApi.CloseMenu(player);
             return;

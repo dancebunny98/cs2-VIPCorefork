@@ -95,7 +95,7 @@ public class Tag : VipFeatureBase
 
         var userTag = GetFeatureValue<List<string>>(player);
 
-        // Goes through Api.CreateMenu so it respects UseWasdMenu/MenuManagerCS2,
+        // Goes through Api.CreateMenu so it respects PanoramaMenuManager settings,
         // instead of always forcing the native chat (!1 !2 !3) menu.
         var menu = CreateMenu(GetTranslatedText(Feature));
 

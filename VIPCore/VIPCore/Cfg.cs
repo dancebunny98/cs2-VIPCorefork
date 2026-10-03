@@ -26,12 +26,6 @@ public class CoreConfig
 {
     public int TimeMode { get; init; } = 0;
     public int ServerId { get; init; } = 0;
-    public bool UseCenterHtmlMenu { get; init; } = true;
-
-    // If MenuManagerCS2 ("menu:nfcore") is installed, force the VIP menu to open
-    // as a WASD button menu regardless of the player's own /menu preference.
-    // Has no effect if MenuManagerCS2 is not installed.
-    public bool UseWasdMenu { get; init; } = true;
     [JsonPropertyName("ServerIP")] public string ServerIp { get; init; } = "0.0.0.0";
     public int ServerPort { get; init; } = 27015;
 

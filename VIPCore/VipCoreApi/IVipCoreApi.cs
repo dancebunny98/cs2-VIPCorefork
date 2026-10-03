@@ -232,7 +232,7 @@ public interface IVipCoreApi
     T LoadConfig<T>(string name);
 
     /// <summary>
-    /// Returns a menu depending on the UseCenterHtmlMenu / UseWasdMenu parameters from the config.
+    /// Returns a menu using PanoramaMenuManagerCore and the player's menu settings.
     /// </summary>
     /// <param name="title"></param>
     /// <returns></returns>
