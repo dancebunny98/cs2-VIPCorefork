@@ -75,9 +75,9 @@ public class VipTest : BasePlugin
             return;
         }
 
-        var authorizedSteamId = controller.AuthorizedSteamID;
-
-        if (authorizedSteamId == null) return;
+        var steamId64 = controller.AuthorizedSteamID?.SteamId64 ?? controller.SteamID;
+        if (steamId64 == 0) return;
+        var authorizedSteamId = new SteamID(steamId64);
 
         _ = GivePlayerVipTest(controller, authorizedSteamId, _config);
     }
