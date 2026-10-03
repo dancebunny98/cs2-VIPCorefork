@@ -37,6 +37,8 @@
 
   <!-- NuGet-зависимости (используются через Directory.Packages.props) -->
   <PropertyGroup Label="Dependencies">
+    <DependencyDirectory Condition="'$(DependencyDirectory)' == ''">$(MSBuildThisFileDirectory)build-deps</DependencyDirectory>
+    <MenuManagerApiPath Condition="'$(MenuManagerApiPath)' == ''">$(DependencyDirectory)\MenuManagerApi.dll</MenuManagerApiPath>
     <CssApiVersion>1.0.376</CssApiVersion>
     <DapperVersion>2.1.79</DapperVersion>
     <MySqlConnectorVersion>2.6.2</MySqlConnectorVersion>

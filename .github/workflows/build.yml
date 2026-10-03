@@ -12,7 +12,6 @@ on:
     branches: [ main ]
     paths:
       - 'VIPCore/**'
-      - 'RequirmentsApi/**'
       - '.github/workflows/build.yml'
   pull_request:
     branches: [ main ]
@@ -125,6 +124,14 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ needs.prepare.outputs.dotnet }}
+      - name: Download PanoramaMenuManager API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p VIPCore/build-deps
+          mm_url=$(curl -fsSL https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n1)
+          curl -fsSL "$mm_url" -o /tmp/menumanager.zip
+          unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d VIPCore/build-deps
       - name: Restore & build
         run: |
           dotnet restore VIPCore/VipCoreApi/VipCoreApi.csproj
@@ -185,6 +192,14 @@ jobs:
     needs: [prepare, build-vipcoreapi, copy-menumanagerapi]
     steps:
       - uses: actions/checkout@v5
+      - name: Download PanoramaMenuManager API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p VIPCore/build-deps
+          mm_url=$(curl -fsSL https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n1)
+          curl -fsSL "$mm_url" -o /tmp/menumanager.zip
+          unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d VIPCore/build-deps
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ needs.prepare.outputs.dotnet }}
@@ -234,6 +249,14 @@ jobs:
         module: ${{ fromJson(needs.prepare.outputs.modules) }}
     steps:
       - uses: actions/checkout@v5
+      - name: Download PanoramaMenuManager API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p VIPCore/build-deps
+          mm_url=$(curl -fsSL https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n1)
+          curl -fsSL "$mm_url" -o /tmp/menumanager.zip
+          unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d VIPCore/build-deps
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ needs.prepare.outputs.dotnet }}
