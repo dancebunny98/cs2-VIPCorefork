@@ -86,7 +86,7 @@ public partial class VipCore : BasePlugin
         }
 
         Logger.LogInformation(MenuApi != null
-            ? "PanoramaMenuManagerCS2 found, VIP menu will use legacy ButtonMenu."
+            ? "PanoramaMenuManagerCS2 found, VIP menu type will follow MenuManager settings."
             : "MenuManagerCS2 not found, falling back to the native Chat/CenterHtml menu.");
     }
 
