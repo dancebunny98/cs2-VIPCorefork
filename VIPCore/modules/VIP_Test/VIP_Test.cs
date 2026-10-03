@@ -21,15 +21,29 @@ public class VipTest : BasePlugin
     private IVipCoreApi? _api;
     private Config? _config;
     private Task<bool>? _tableReady;
+    private bool _initialized;
     
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
     public override void OnAllPluginsLoaded(bool hotReload)
     {
+        TryInitialize();
+        // VIPCore may finish loading after this callback. Keep checking until
+        // the capability becomes available instead of leaving the command inert.
+        AddTimer(1.0f, TryInitialize, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void TryInitialize()
+    {
+        if (_initialized) return;
+
         _api = PluginCapability.Get();
         if (_api == null) return;
+
         _config = LoadConfig();
         _tableReady = CreateVipTestTable();
+        _initialized = true;
+        Console.WriteLine("[VIP_Test] Initialized");
     }
 
     [ConsoleCommand("css_viptest")]
@@ -49,7 +63,11 @@ public class VipTest : BasePlugin
             return;
         }
 
-        if (!_config.VipTestEnabled) return;
+        if (!_config.VipTestEnabled)
+        {
+            command.ReplyToCommand(" VIP-Test отключен в vip_test.json.");
+            return;
+        }
 
         if (_api.IsClientVip(controller))
         {
@@ -141,14 +159,8 @@ public class VipTest : BasePlugin
                     _api.GetTranslatedText("viptest.SuccessfullyPassed",
                         timeRemaining.ToString(timeRemaining.Hours > 0 ? @"h\:mm\:ss" : @"m\:ss")));
 
-                try
-                {
-                    _api.GiveClientVip(player, vipGroup, vipTest.VipTestDuration);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
+                // VIP-Test must not create a persistent database VIP.
+                _api.GiveClientTemporaryVip(player, vipGroup, vipTest.VipTestDuration);
             });
         }
         catch (Exception e)
