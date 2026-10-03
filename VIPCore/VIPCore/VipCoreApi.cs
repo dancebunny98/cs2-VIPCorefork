@@ -186,8 +186,8 @@ public class VipCoreApi : IVipCoreApi
     {
         var name = player.PlayerName;
 
-        var authSteamId = player.AuthorizedSteamID;
-        if (authSteamId == null)
+        var authSteamId = new SteamID(player.AuthorizedSteamID?.SteamId64 ?? player.SteamID);
+        if (authSteamId.SteamId64 == 0)
         {
             _vipCore.Logger.LogError($"AuthorizedSteamId is null");
             return;
@@ -240,8 +240,8 @@ public class VipCoreApi : IVipCoreApi
 
         var name = player.PlayerName;
 
-        var authSteamId = player.AuthorizedSteamID;
-        if (authSteamId == null)
+        var authSteamId = new SteamID(player.AuthorizedSteamID?.SteamId64 ?? player.SteamID);
+        if (authSteamId.SteamId64 == 0)
         {
             _vipCore.Logger.LogError($"AuthorizedSteamId is null");
             return;
