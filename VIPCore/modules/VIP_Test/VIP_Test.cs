@@ -80,6 +80,10 @@ public class VipTest : BasePlugin
         if (steamId64 == 0) return;
         var authorizedSteamId = new SteamID(steamId64);
 
+        // Database checks are asynchronous and can take a few seconds when MySQL is
+        // reconnecting. Confirm the command immediately so the player is not left
+        // with no feedback while the test is being processed.
+        _api.PrintToChat(controller, "VIP-Test: проверяем доступность теста...");
         _ = GivePlayerVipTest(controller, authorizedSteamId, _config);
     }
 
@@ -146,27 +150,33 @@ public class VipTest : BasePlugin
 
             Server.NextFrame(() =>
             {
-                // Игрок мог успеть получить VIP каким-то другим путём, пока шёл
-                // асинхронный запрос к БД выше (другой админ выдал вручную, второй
-                // клик по !viptest и т.п.) - GiveClientVip в этом случае КИДАЕТ
-                // исключение ("Player already has a VIP"). Перепроверяем перед
-                // самим вызовом и просто молча выходим, а не падаем.
-                if (!player.IsValid || _api.IsClientVip(player))
+                try
                 {
-                    return;
+                    // The player may have received VIP while the database request was running.
+                    if (!player.IsValid || _api.IsClientVip(player)) return;
+
+                    // VIP-Test must not create a persistent database VIP.
+                    _api.GiveClientTemporaryVip(player, vipGroup, vipTest.VipTestDuration);
+                    _api.PrintToChat(player,
+                        _api.GetTranslatedText("viptest.SuccessfullyPassed",
+                            timeRemaining.ToString(timeRemaining.Hours > 0 ? @"h\:mm\:ss" : @"m\:ss")));
                 }
-
-                _api.PrintToChat(player,
-                    _api.GetTranslatedText("viptest.SuccessfullyPassed",
-                        timeRemaining.ToString(timeRemaining.Hours > 0 ? @"h\:mm\:ss" : @"m\:ss")));
-
-                // VIP-Test must not create a persistent database VIP.
-                _api.GiveClientTemporaryVip(player, vipGroup, vipTest.VipTestDuration);
+                catch (Exception e)
+                {
+                    Console.WriteLine($"[VIP_Test] Failed to grant temporary VIP: {e}");
+                    if (player.IsValid)
+                        _api.PrintToChat(player, "VIP-Test: не удалось выдать VIP, попробуйте ещё раз.");
+                }
             });
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            Console.WriteLine($"[VIP_Test] Test request failed: {e}");
+            Server.NextFrame(() =>
+            {
+                if (player.IsValid)
+                    _api?.PrintToChat(player, "VIP-Test: произошла ошибка, попробуйте ещё раз позже.");
+            });
         }
     }
 
@@ -308,9 +318,22 @@ public class VipTest : BasePlugin
 
         if (!File.Exists(configPath)) return CreateConfig(configPath);
 
-        var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath))!;
-
-        return config;
+        try
+        {
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            };
+            return JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options)
+                   ?? CreateConfig(configPath);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[VIP_Test] Failed to read {configPath}: {e.Message}");
+            return CreateConfig(configPath);
+        }
     }
 
     private Config CreateConfig(string configPath)
