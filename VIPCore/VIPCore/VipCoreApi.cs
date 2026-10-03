@@ -400,7 +400,7 @@ public class VipCoreApi : IVipCoreApi
         // Prefer MenuManagerCS2's WASD button menu when it's installed and enabled.
         if (_vipCore.CoreConfig.UseWasdMenu && _vipCore.MenuApi != null)
         {
-            return _vipCore.MenuApi.GetMenuForcetype(title, MenuType.ButtonMenu);
+            return _vipCore.MenuApi.GetMenuForcetype(title, MenuType.PanoramaWasdMenu);
         }
 
         return _vipCore.CoreConfig.UseCenterHtmlMenu ? new CenterHtmlMenu(title, _vipCore) : new ChatMenu(title);

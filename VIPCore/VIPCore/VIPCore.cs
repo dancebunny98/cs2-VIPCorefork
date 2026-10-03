@@ -86,7 +86,7 @@ public partial class VipCore : BasePlugin
         }
 
         Logger.LogInformation(MenuApi != null
-            ? "MenuManagerCS2 found, VIP menu will use WASD (ButtonMenu)."
+            ? "PanoramaMenuManagerCS2 found, VIP menu will use WASD (PanoramaWasdMenu)."
             : "MenuManagerCS2 not found, falling back to the native Chat/CenterHtml menu.");
     }
 
@@ -109,10 +109,7 @@ public partial class VipCore : BasePlugin
     {
         RegisterListener<Listeners.OnClientAuthorized>((slot, id) =>
         {
-            var player = Utilities.GetPlayerFromSlot(slot);
-            if (player is null || !player.IsValid) return;
-
-            Task.Run(() => OnClientAuthorizedAsync(player, id));
+            TryAuthorizePlayer(slot, id, 0);
         });
 
         RegisterListener<Listeners.OnMapStart>(_ =>
@@ -131,6 +128,25 @@ public partial class VipCore : BasePlugin
 
         RegisterEventHandler<EventPlayerDisconnect>(EventPlayerDisconnect);
         RegisterEventHandler<EventPlayerSpawn>(EventPlayerSpawn);
+    }
+
+    private void TryAuthorizePlayer(int slot, SteamID steamId, int attempt)
+    {
+        var player = Utilities.GetPlayerFromSlot(slot);
+        if (player is not null && player.IsValid)
+        {
+            Task.Run(() => OnClientAuthorizedAsync(player, steamId));
+            return;
+        }
+
+        if (attempt < 20)
+        {
+            AddTimer(0.25f, () => TryAuthorizePlayer(slot, steamId, attempt + 1));
+        }
+        else
+        {
+            Logger.LogWarning("Could not resolve player controller for authorized slot {Slot}", slot);
+        }
     }
 
     private HookResult EventPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
