@@ -23,6 +23,7 @@ public class VipTest : BasePlugin
     private Config? _config;
     private Task<bool>? _tableReady;
     private bool _initialized;
+    private readonly object _tableReadyLock = new();
     
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
@@ -96,7 +97,7 @@ public class VipTest : BasePlugin
         // сервера, поэтому ВСЁ тело метода обёрнуто в try/catch.
         try
         {
-            if (_tableReady != null && !await _tableReady)
+            if (!await EnsureTableReadyAsync())
             {
                 Server.NextFrame(() => _api?.PrintToChat(player,
                     "VIP-Test временно недоступен: база данных ещё не готова."));
@@ -182,10 +183,25 @@ public class VipTest : BasePlugin
 
     private async Task<bool> AddUserOrUpdateVipTestAsync(string steamId, int endTime)
     {
-        if (await IsUserInVipTest(steamId))
-            return await UpdateUserVipTestCount(steamId, endTime);
+        try
+        {
+            await using var dbConnection = new MySqlConnection(_api!.GetDatabaseConnectionString);
+            await dbConnection.OpenAsync();
 
-        return await AddUserToVipTest(steamId, endTime);
+            // The primary key makes this safe when a player sends the command twice
+            // before the first asynchronous request has completed.
+            await dbConnection.ExecuteAsync(@"
+                INSERT INTO `vipcore_test` (`steamid`, `end_time`)
+                VALUES (@SteamId, @EndTime)
+                ON DUPLICATE KEY UPDATE `end_time` = @EndTime;",
+                new { SteamId = steamId, EndTime = endTime });
+            return true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[VIP_Test] Failed to save test cooldown for '{steamId}': {e}");
+            return false;
+        }
     }
 
     private async Task<bool> AddUserToVipTest(string steamId, long endTime)
@@ -287,6 +303,17 @@ public class VipTest : BasePlugin
         }
 
         return false;
+    }
+
+    private Task<bool> EnsureTableReadyAsync()
+    {
+        lock (_tableReadyLock)
+        {
+            if (_tableReady == null || _tableReady.IsCompletedSuccessfully && !_tableReady.Result)
+                _tableReady = CreateVipTestTable();
+
+            return _tableReady;
+        }
     }
 
     private async Task<bool> TryCreateVipTestTable()
