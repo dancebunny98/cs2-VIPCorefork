@@ -86,6 +86,7 @@ public class Tag : VipFeatureBase
         // Loading here also guarantees that the core has loaded the cookie file first.
         var cookie = GetPlayerCookie<string>(player.SteamID, "player_tag");
         _userSettings[player.Slot] = new UserSettings { Tag = cookie ?? "\0" };
+        EnsureAutomaticTag(player);
         ChangeTag(player);
     }
 
@@ -101,11 +102,13 @@ public class Tag : VipFeatureBase
 
         menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
         {
-            _userSettings[player.Slot]!.Tag = "\0";
+            // VIP players always have a tag. Selecting disable restores the
+            // last configured tag instead of leaving the clan tag empty.
+            _userSettings[player.Slot]!.Tag = GetDefaultTag(player);
 
-            PrintToChat(player, GetTranslatedText("tag.Off"));
+            PrintToChat(player, GetTranslatedText("tag.On", _userSettings[player.Slot]!.Tag));
             ChangeTag(controller);
-        }, _userSettings[player.Slot]!.Tag == "\0");
+        }, false);
         foreach (var tag in userTag)
         {
             menu.AddMenuOption(tag, (controller, option) =>
@@ -123,6 +126,7 @@ public class Tag : VipFeatureBase
     {
         if (!(player != null && player.IsValid && !player.IsBot && !player.IsHLTV && _userSettings[player.Slot] != null)) return;
 
+        EnsureAutomaticTag(player);
         var tag = _userSettings[player.Slot]!.Tag;
         SetPlayerCookie(player.SteamID, "player_tag", tag);
         Api.SaveCookies();
@@ -130,11 +134,33 @@ public class Tag : VipFeatureBase
         Utilities.SetStateChanged(player, "CCSPlayerController", "m_szClan");
     }
 
+    private string GetDefaultTag(CCSPlayerController player)
+    {
+        try
+        {
+            var tags = GetFeatureValue<List<string>>(player);
+            return tags.LastOrDefault(tag => !string.IsNullOrWhiteSpace(tag)) ?? "\0";
+        }
+        catch
+        {
+            return "\0";
+        }
+    }
+
+    private void EnsureAutomaticTag(CCSPlayerController player)
+    {
+        if (_userSettings[player.Slot] == null || !PlayerHasFeature(player)) return;
+
+        _userSettings[player.Slot]!.Tag = GetDefaultTag(player);
+    }
+
     public override void OnPlayerSpawn(CCSPlayerController player)
     {
         if (_userSettings[player.Slot] == null) return;
         if (!PlayerHasFeature(player))
             _userSettings[player.Slot]!.Tag = "\0";
+        else
+            EnsureAutomaticTag(player);
 
         ChangeTag(player);
     }

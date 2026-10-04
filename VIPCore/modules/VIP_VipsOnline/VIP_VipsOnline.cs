@@ -31,7 +31,10 @@ public class VIPVipsOnline : BasePlugin
     {
         if (_api == null) return;
 
-        var onlineVips = Utilities.GetPlayers().Where(p => p.IsValid && _api.IsClientVip(p)).Select(p => $"{p.PlayerName}").ToList();
+        var onlineVips = Utilities.GetPlayers()
+            .Where(p => p.IsValid && _api.IsClientVip(p))
+            .Select(p => $"{p.PlayerName} [{GetDisplayTag(p)}]")
+            .ToList();
 
         if (player == null)
         {
@@ -65,6 +68,28 @@ public class VIPVipsOnline : BasePlugin
         menu.Open(player);
 
         AddTimer(AutoCloseSeconds, () => _api.CloseMenu(player));
+    }
+
+    private string GetDisplayTag(CCSPlayerController player)
+    {
+        try
+        {
+            var displayTag = _api!.GetFeatureValue<string>(player, "DisplayTag");
+            if (!string.IsNullOrWhiteSpace(displayTag)) return displayTag;
+        }
+        catch
+        {
+            // DisplayTag is optional for backwards-compatible vip.json files.
+        }
+
+        try
+        {
+            return _api!.GetClientVipGroup(player);
+        }
+        catch
+        {
+            return "VIP";
+        }
     }
 
     private const float AutoCloseSeconds = 6.0f;
