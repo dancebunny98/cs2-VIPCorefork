@@ -2,6 +2,10 @@ using System.Collections.Generic;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
+using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
+using CounterStrikeSharp.API.Modules.Entities;
+using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.Utils;
 using VipCoreApi;
@@ -78,6 +82,50 @@ public class Tag : VipFeatureBase
             _userSettings[player.Slot] = null;
             return HookResult.Continue;
         });
+    }
+
+    [GameEventHandler(HookMode.Pre)]
+    public HookResult OnPlayerChat(EventPlayerChat @event, GameEventInfo info)
+    {
+        var player = Utilities.GetPlayerFromSlot(@event.Userid);
+        if (player == null || !player.IsValid || player.IsBot || !IsClientVip(player))
+            return HookResult.Continue;
+
+        var isModerator = HasModeratorFlag(player);
+        if (!isModerator && (!PlayerHasFeature(player) || _userSettings[player.Slot] == null))
+            return HookResult.Continue;
+
+        var tag = isModerator ? "MOD" : _userSettings[player.Slot]!.Tag;
+        if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
+            return HookResult.Continue;
+
+        var message = $"{ChatColors.Grey}[{tag}] {ChatColors.Default}{player.PlayerName}: {@event.Text}";
+        foreach (var recipient in Utilities.GetPlayers())
+        {
+            if (!recipient.IsValid || recipient.IsBot ||
+                (@event.Teamonly && recipient.TeamNum != player.TeamNum))
+                continue;
+
+            recipient.PrintToChat(message);
+        }
+
+        return HookResult.Handled;
+    }
+
+    private static bool HasModeratorFlag(CCSPlayerController player)
+    {
+        var steamId = new SteamID(player.SteamID);
+        // Source-style flags a,b,c,j,g,k,m. The root flag (z) is intentionally
+        // not included, so root-only players keep their normal VIP tag.
+        if (AdminManager.PlayerHasPermissions(steamId, "@css/root"))
+            return false;
+
+        return new[]
+        {
+            "@css/reservation", "@css/generic", "@css/kick", "@css/chat",
+            "@css/changemap", "@css/vote", "@css/rcon"
+        }
+            .Any(permission => AdminManager.PlayerHasPermissions(steamId, permission));
     }
 
     public override void OnPlayerLoaded(CCSPlayerController player, string group)
