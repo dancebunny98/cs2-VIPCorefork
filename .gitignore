@@ -1,41 +1,10 @@
-**/.vs
-**/.idea
-**/bin
-**/obj
-**/build-deps
-.history
-**/runtimes
-**/publish
-
-# CounterStrikeSharp.API's build targets copy every project's compiled output
-# into <project>/build/addons/counterstrikesharp/plugins/<name>/ on every local
-# `dotnet build`. That folder is a build artifact, not source - never commit it,
-# or people who download the repo end up deploying stale DLLs instead of a
-# fresh build. (See VIPCore/modules/*/build/ - previously committed by mistake.)
-# README.md inside build/ is kept intentionally as documentation - everything
-# else under build/ (DLLs, pdbs, addons/...) stays ignored.
-**/build/*
-!**/build/README.md
-!**/build/readme.md
-
-VIPCore/ignoremodules/
-VIPCore/privatemodules/
-VIPCore/addons/
-VIPCoreForModularityPlugin/
+bin/
+obj/
+dist/
+out/
+.vs/
+.idea/
 *.user
-*.xml
-*.editorconfig
-
-VIPCore/modules/VIP_Hook/Vectors.cs
-VIPCore/modules/VIP_Hook/VIP_Hook.cs
-VIPCore/modules/VIP_Hook/VIP_Hook.csproj
-
-VIPCore/modules/VIP_Tracers/VIP_Tracers.cs
-VIPCore/modules/VIP_Tracers/VIP_Tracers.csproj
-
-VIPCore/modules/VIP_TestM/VIP_TestM.csproj
-VIPCore/modules/VIP_TestM/Class1.cs
-
-VIPCore/VIPCore.zip
-VIPCore-v1.2.2/
-VIPCore_/
+*.suo
+*.nupkg
+TestResults/
