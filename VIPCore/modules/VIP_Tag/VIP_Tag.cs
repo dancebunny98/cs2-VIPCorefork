@@ -127,7 +127,7 @@ public class Tag : VipFeatureBase
         if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
             return HookResult.Continue;
 
-        message.SetString("param1", $"[{tag}] {message.ReadString("param1")}");
+        message.SetString("param1", $"{ChatColors.Grey}[{tag}] \x03{message.ReadString("param1")}");
         return HookResult.Continue;
     }
 
