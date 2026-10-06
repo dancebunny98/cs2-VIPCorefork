@@ -6,7 +6,8 @@
 `"Tag": [ "ADMIN", "ADMINISTRATOR" ]` // you can add your own value here
 
 The last value in `Tag` is applied automatically to the player's chat and TAB
-(`OWNER` in `"Tag": [ "ADMIN", "OWNER" ]`). VIP players always keep this tag.
+(`OWNER` in `"Tag": [ "ADMIN", "OWNER" ]`). Players can choose `Disable` to
+hide the tag in both places; that choice is saved until they select a tag again.
 
 Add `DisplayTag` to control the label shown after the player's name in `!vips`:
 

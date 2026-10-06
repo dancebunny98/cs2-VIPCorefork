@@ -49,6 +49,14 @@ public abstract class VipFeatureBase : IVipFeature
     {
     }
 
+    public virtual string[]? GetPanoramaChoices(CCSPlayerController player) => null;
+
+    public virtual string GetPanoramaValue(CCSPlayerController player) => string.Empty;
+
+    public virtual void SelectPanoramaChoice(CCSPlayerController player, int index)
+    {
+    }
+
     public List<(string feautre, object value)> GetAllRegisteredFeatures() => Api.GetAllRegisteredFeatures().ToList();
 
     public bool IsClientVip(CCSPlayerController player) => Api.IsClientVip(player);

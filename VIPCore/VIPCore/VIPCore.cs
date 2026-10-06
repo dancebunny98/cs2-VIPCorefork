@@ -7,6 +7,7 @@ using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities;
+using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.Timers;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -551,6 +552,18 @@ public partial class VipCore : BasePlugin
                     if (!panorama)
                         label += $": {(featureState == FeatureState.Enabled ? Localizer["chat.Enabled"] : Localizer["chat.Disabled"])}";
                     MenuApi.AddToggle(menu, label, featureState == FeatureState.Enabled, SelectFeature, disabled);
+                }
+                else if (panorama && featureType == FeatureType.Selectable &&
+                         feature.Handler?.GetPanoramaChoices(player) is { Length: > 0 } choices && MenuApi != null)
+                {
+                    var handler = feature.Handler;
+                    menu.PostSelectAction = PostSelectAction.Nothing;
+                    MenuApi.AddSelect(menu, Localizer[key], handler.GetPanoramaValue(player), choices,
+                        (controller, _, index) =>
+                        {
+                            handler.SelectPanoramaChoice(controller, index);
+                            CreateMenu(controller);
+                        }, disabled);
                 }
                 else
                 {

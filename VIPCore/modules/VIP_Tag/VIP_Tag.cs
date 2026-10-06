@@ -7,6 +7,7 @@ using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Menu;
+using CounterStrikeSharp.API.Modules.UserMessages;
 using CounterStrikeSharp.API.Modules.Utils;
 using MenuManager;
 using VipCoreApi;
@@ -22,6 +23,7 @@ public class VIPTag : BasePlugin
 
     private IVipCoreApi? _api;
     private Tag _tag;
+    private int _chatMessageId = -1;
 
     private PluginCapability<IVipCoreApi> PluginCapability { get; } = new("vipcore:core");
 
@@ -32,10 +34,14 @@ public class VIPTag : BasePlugin
 
         _tag = new Tag(this, _api);
         _api.RegisterFeature(_tag, FeatureType.Selectable);
+        _chatMessageId = UserMessage.FindIdByName("SayText2");
+        HookUserMessage(_chatMessageId, _tag.OnChatMessage, HookMode.Pre);
     }
 
     public override void Unload(bool hotReload)
     {
+        if (_chatMessageId >= 0)
+            UnhookUserMessage(_chatMessageId, _tag.OnChatMessage, HookMode.Pre);
         _api?.UnRegisterFeature(_tag);
     }
 }
@@ -61,7 +67,7 @@ public class Tag : VipFeatureBase
         {
             var cookie = GetPlayerCookie<string>(steamId.SteamId64, "player_tag");
 
-            _userSettings[slot] = new UserSettings { Tag = cookie ?? "\0" };
+            _userSettings[slot] = new UserSettings { Tag = cookie ?? string.Empty };
         });
 
         vipTag.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
@@ -86,10 +92,14 @@ public class Tag : VipFeatureBase
         });
     }
 
-    [GameEventHandler(HookMode.Pre)]
-    public HookResult OnPlayerChat(EventPlayerChat @event, GameEventInfo info)
+    public HookResult OnChatMessage(UserMessage message)
     {
-        var player = Utilities.GetPlayerFromSlot(@event.Userid);
+        if (!message.ReadBool("chat") ||
+            !message.ReadString("msg_name").TrimStart('#').StartsWith("Cstrike_Chat_", StringComparison.Ordinal) ||
+            message.GetRepeatedFieldCount("params") < 2)
+            return HookResult.Continue;
+
+        var player = Utilities.GetPlayerFromIndex(message.ReadInt("ent_idx"));
         if (player == null || !player.IsValid || player.IsBot || !IsClientVip(player))
             return HookResult.Continue;
 
@@ -97,29 +107,20 @@ public class Tag : VipFeatureBase
         if (!isModerator && !PlayerHasFeature(player))
             return HookResult.Continue;
 
-        // The chat event can arrive before OnPlayerLoaded has populated the
-        // per-slot state (for example after a hot reload). Resolve the default
-        // tag from the current VIP group instead of dropping the chat message.
+        var selectedTag = _userSettings[player.Slot]?.Tag;
+        if (selectedTag == "\0")
+            return HookResult.Continue;
+
         var tag = isModerator
             ? "MOD"
-            : _userSettings[player.Slot]?.Tag is { } selected && !string.IsNullOrWhiteSpace(selected) && selected != "\0"
-                ? selected
+            : !string.IsNullOrWhiteSpace(selectedTag)
+                ? selectedTag
                 : GetDefaultTag(player);
         if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
             return HookResult.Continue;
 
-        var message = $"{ChatColors.Grey}[{tag}] {ChatColors.Default}{player.PlayerName}: {@event.Text}";
-        info.DontBroadcast = true;
-        foreach (var recipient in Utilities.GetPlayers())
-        {
-            if (!recipient.IsValid || recipient.IsBot ||
-                (@event.Teamonly && recipient.TeamNum != player.TeamNum))
-                continue;
-
-            recipient.PrintToChat(message);
-        }
-
-        return HookResult.Handled;
+        message.SetString("params", $"{ChatColors.Grey}[{tag}] {ChatColors.Default}{message.ReadString("params", 0)}", 0);
+        return HookResult.Continue;
     }
 
     private static bool HasModeratorFlag(CCSPlayerController player)
@@ -143,9 +144,28 @@ public class Tag : VipFeatureBase
         // OnClientAuthorized is not emitted for players already connected during hot reload.
         // Loading here also guarantees that the core has loaded the cookie file first.
         var cookie = GetPlayerCookie<string>(player.SteamID, "player_tag");
-        _userSettings[player.Slot] = new UserSettings { Tag = cookie ?? "\0" };
+        _userSettings[player.Slot] = new UserSettings { Tag = cookie ?? GetDefaultTag(player) };
         EnsureAutomaticTag(player);
         ChangeTag(player);
+    }
+
+    public override string[] GetPanoramaChoices(CCSPlayerController player) =>
+        [GetTranslatedText("tag.Disable"), .. GetFeatureValue<List<string>>(player)];
+
+    public override string GetPanoramaValue(CCSPlayerController player) =>
+        _userSettings[player.Slot]?.Tag == "\0"
+            ? GetTranslatedText("tag.Disable")
+            : _userSettings[player.Slot]?.Tag ?? GetDefaultTag(player);
+
+    public override void SelectPanoramaChoice(CCSPlayerController player, int index)
+    {
+        var tags = GetFeatureValue<List<string>>(player);
+        if (index < 0 || index > tags.Count || _userSettings[player.Slot] == null) return;
+
+        _userSettings[player.Slot]!.Tag = index == 0 ? "\0" : tags[index - 1];
+        ChangeTag(player);
+        var menuApi = MenuCapability.Get();
+        menuApi?.Notify(player, GetTranslatedText(Feature), GetPanoramaValue(player));
     }
 
     public override void OnSelectItem(CCSPlayerController player, FeatureState state)
@@ -161,16 +181,13 @@ public class Tag : VipFeatureBase
         try { menuApi = MenuCapability.Get(); }
         catch { menuApi = null; }
 
-        if (userTag.Count > 0 && menuApi?.GetMenuType(player) == MenuManager.MenuType.PanoramaMenu)
+        if (menuApi?.GetMenuType(player) == MenuManager.MenuType.PanoramaMenu)
         {
-            var choices = userTag.ToArray();
-            var current = _userSettings[player.Slot]!.Tag;
+            var choices = GetPanoramaChoices(player);
             menu.PostSelectAction = PostSelectAction.Nothing;
-            menuApi.AddSelect(menu, GetTranslatedText(Feature), current, choices, (controller, _, index) =>
+            menuApi.AddSelect(menu, GetTranslatedText(Feature), GetPanoramaValue(player), choices, (controller, _, index) =>
             {
-                _userSettings[controller.Slot]!.Tag = choices[index];
-                ChangeTag(controller);
-                menuApi.Notify(controller, GetTranslatedText(Feature), choices[index]);
+                SelectPanoramaChoice(controller, index);
                 OnSelectItem(controller, state);
             });
             menu.Open(player);
@@ -179,19 +196,17 @@ public class Tag : VipFeatureBase
 
         menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
         {
-            // VIP players always have a tag. Selecting disable restores the
-            // last configured tag instead of leaving the clan tag empty.
-            _userSettings[player.Slot]!.Tag = GetDefaultTag(player);
+            _userSettings[controller.Slot]!.Tag = "\0";
 
-            PrintToChat(player, GetTranslatedText("tag.On", _userSettings[player.Slot]!.Tag));
+            PrintToChat(controller, GetTranslatedText("tag.Off"));
             ChangeTag(controller);
-        }, false);
+        }, _userSettings[player.Slot]!.Tag == "\0");
         foreach (var tag in userTag)
         {
             menu.AddMenuOption(tag, (controller, option) =>
             {
-                _userSettings[player.Slot]!.Tag = tag;
-                PrintToChat(player, GetTranslatedText("tag.On", tag));
+                _userSettings[controller.Slot]!.Tag = tag;
+                PrintToChat(controller, GetTranslatedText("tag.On", tag));
                 ChangeTag(controller);
             }, _userSettings[player.Slot]!.Tag == tag);
         }
@@ -207,7 +222,7 @@ public class Tag : VipFeatureBase
         var tag = _userSettings[player.Slot]!.Tag;
         SetPlayerCookie(player.SteamID, "player_tag", tag);
         Api.SaveCookies();
-        player.Clan = tag;
+        player.Clan = tag == "\0" ? string.Empty : tag;
         Utilities.SetStateChanged(player, "CCSPlayerController", "m_szClan");
     }
 
@@ -227,6 +242,8 @@ public class Tag : VipFeatureBase
     private void EnsureAutomaticTag(CCSPlayerController player)
     {
         if (_userSettings[player.Slot] == null || !PlayerHasFeature(player)) return;
+
+        if (_userSettings[player.Slot]!.Tag == "\0") return;
 
         var tags = GetFeatureValue<List<string>>(player);
         if (!tags.Contains(_userSettings[player.Slot]!.Tag))

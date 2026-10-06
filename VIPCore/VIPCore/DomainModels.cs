@@ -27,6 +27,7 @@ public class PlayerCookie
 public class Feature
 {
     public FeatureType FeatureType { get; set; }
+    public VipFeatureBase? Handler { get; set; }
     public Action<CCSPlayerController, FeatureState>? OnSelectItem { get; set; }
 }
 

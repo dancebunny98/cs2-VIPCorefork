@@ -62,6 +62,25 @@ public class Fov : VipFeatureBase
         _fovSettings[player.Slot] = cookie == 0 ? 90 : cookie;
     }
 
+    public override string[] GetPanoramaChoices(CCSPlayerController player) =>
+        [GetTranslatedText("fov.Disable"), .. GetFeatureValue<List<int>>(player).Select(value => value.ToString())];
+
+    public override string GetPanoramaValue(CCSPlayerController player) =>
+        _fovSettings[player.Slot] == 90
+            ? GetTranslatedText("fov.Disable")
+            : _fovSettings[player.Slot].ToString();
+
+    public override void SelectPanoramaChoice(CCSPlayerController player, int index)
+    {
+        var values = GetFeatureValue<List<int>>(player);
+        if (index < 0 || index > values.Count) return;
+
+        _fovSettings[player.Slot] = index == 0 ? 90 : values[index - 1];
+        ChangeFov(player);
+        var menuApi = MenuCapability.Get();
+        menuApi?.Notify(player, GetTranslatedText(Feature), GetPanoramaValue(player));
+    }
+
     public override void OnSelectItem(CCSPlayerController player, FeatureState state)
     {
         var userFov = GetFeatureValue<List<int>>(player);
@@ -73,17 +92,11 @@ public class Fov : VipFeatureBase
 
         if (menuApi?.GetMenuType(player) == MenuManager.MenuType.PanoramaMenu)
         {
-            var choices = new[] { GetTranslatedText("fov.Disable") }
-                .Concat(userFov.Select(value => value.ToString())).ToArray();
-            var current = _fovSettings[player.Slot] == 90
-                ? choices[0]
-                : _fovSettings[player.Slot].ToString();
+            var choices = GetPanoramaChoices(player);
             menu.PostSelectAction = PostSelectAction.Nothing;
-            menuApi.AddSelect(menu, GetTranslatedText(Feature), current, choices, (controller, _, index) =>
+            menuApi.AddSelect(menu, GetTranslatedText(Feature), GetPanoramaValue(player), choices, (controller, _, index) =>
             {
-                _fovSettings[controller.Slot] = index == 0 ? 90 : userFov[index - 1];
-                ChangeFov(controller);
-                menuApi.Notify(controller, GetTranslatedText(Feature), choices[index]);
+                SelectPanoramaChoice(controller, index);
                 OnSelectItem(controller, state);
             });
             menu.Open(player);

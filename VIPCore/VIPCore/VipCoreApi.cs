@@ -63,6 +63,7 @@ public class VipCoreApi : IVipCoreApi
                 _vipCore.Features.TryAdd(vipFeatureBase.Feature, new Feature
                 {
                     FeatureType = featureType,
+                    Handler = vipFeatureBase,
                     OnSelectItem = vipFeatureBase.OnSelectItem
                 });
             }
