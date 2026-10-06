@@ -127,8 +127,49 @@ public class Tag : VipFeatureBase
         if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
             return HookResult.Continue;
 
-        message.SetString("param1", $"{ChatColors.Grey}[{tag}] \x03{message.ReadString("param1")}");
-        return HookResult.Continue;
+        var chatText = message.ReadString("param2");
+        var firstCharacter = 0;
+        while (firstCharacter < chatText.Length && (char.IsControl(chatText[firstCharacter]) || char.IsWhiteSpace(chatText[firstCharacter])))
+            firstCharacter++;
+        if (firstCharacter < chatText.Length && chatText[firstCharacter] is '!' or '/')
+            return HookResult.Stop;
+
+        var template = message.ReadString("messagename");
+        var channel = template.Contains("_All", StringComparison.Ordinal)
+            ? GetChatLabel("tag.ChatAll", "ALL")
+            : template.Contains("_CT", StringComparison.Ordinal) ? "CT"
+            : template.Contains("_T", StringComparison.Ordinal) ? "T"
+            : GetChatLabel("tag.ChatSpectator", "SPECTATOR");
+        var status = template.Contains("Dead", StringComparison.Ordinal)
+            ? $" [{GetChatLabel("tag.ChatDead", "DEAD")}]"
+            : template.Contains("Spec", StringComparison.Ordinal)
+                ? $" [{GetChatLabel("tag.ChatSpectator", "SPECTATOR")}]"
+                : string.Empty;
+        var location = template.EndsWith("_Loc", StringComparison.Ordinal)
+            ? $" @{message.ReadString("param3")}" : string.Empty;
+        var nameColor = player.TeamNum switch
+        {
+            2 => ChatColors.Yellow,
+            3 => ChatColors.LightBlue,
+            _ => ChatColors.Grey
+        };
+        var formatted = $" {ChatColors.Default}[{channel}] ● {ChatColors.Grey}[{tag}] " +
+                        $"{nameColor}{player.PlayerName}{ChatColors.Default}{location}{status}: {chatText}";
+
+        var recipients = message.Recipients.ToArray();
+        if (recipients.Length == 0) return HookResult.Continue;
+        foreach (var recipient in recipients)
+        {
+            if (recipient.IsValid)
+                recipient.PrintToChat(formatted);
+        }
+        return HookResult.Stop;
+    }
+
+    private string GetChatLabel(string key, string fallback)
+    {
+        var translated = GetTranslatedText(key);
+        return translated == key ? fallback : translated;
     }
 
     private static bool HasModeratorFlag(CCSPlayerController player)
