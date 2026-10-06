@@ -10,6 +10,7 @@ using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.UserMessages;
 using CounterStrikeSharp.API.Modules.Utils;
 using MenuManager;
+using Microsoft.Extensions.Logging;
 using VipCoreApi;
 using static VipCoreApi.IVipCoreApi;
 
@@ -34,8 +35,16 @@ public class VIPTag : BasePlugin
 
         _tag = new Tag(this, _api);
         _api.RegisterFeature(_tag, FeatureType.Selectable);
-        _chatMessageId = UserMessage.FindIdByName("SayText2");
-        HookUserMessage(_chatMessageId, _tag.OnChatMessage, HookMode.Pre);
+        try
+        {
+            // UM_SayText2 is 118 in csgo/usermessages.proto.
+            HookUserMessage(118, _tag.OnChatMessage, HookMode.Pre);
+            _chatMessageId = 118;
+        }
+        catch (NativeException ex)
+        {
+            Logger.LogError(ex, "Chat tag hook unavailable");
+        }
     }
 
     public override void Unload(bool hotReload)
@@ -95,11 +104,10 @@ public class Tag : VipFeatureBase
     public HookResult OnChatMessage(UserMessage message)
     {
         if (!message.ReadBool("chat") ||
-            !message.ReadString("msg_name").TrimStart('#').StartsWith("Cstrike_Chat_", StringComparison.Ordinal) ||
-            message.GetRepeatedFieldCount("params") < 2)
+            !message.ReadString("messagename").TrimStart('#').StartsWith("Cstrike_Chat_", StringComparison.Ordinal))
             return HookResult.Continue;
 
-        var player = Utilities.GetPlayerFromIndex(message.ReadInt("ent_idx"));
+        var player = Utilities.GetPlayerFromIndex(message.ReadInt("entityindex"));
         if (player == null || !player.IsValid || player.IsBot || !IsClientVip(player))
             return HookResult.Continue;
 
@@ -119,7 +127,7 @@ public class Tag : VipFeatureBase
         if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
             return HookResult.Continue;
 
-        message.SetString("params", $"{ChatColors.Grey}[{tag}] {ChatColors.Default}{message.ReadString("params", 0)}", 0);
+        message.SetString("param1", $"{ChatColors.Grey}[{tag}] {ChatColors.Default}{message.ReadString("param1")}");
         return HookResult.Continue;
     }
 
