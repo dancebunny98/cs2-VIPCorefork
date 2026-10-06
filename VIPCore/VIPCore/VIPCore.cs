@@ -76,6 +76,15 @@ public partial class VipCore : BasePlugin
 
     public override void OnAllPluginsLoaded(bool hotReload)
     {
+        ResolveMenuApi();
+
+        Logger.LogInformation(MenuApi != null
+            ? "PanoramaMenuManagerCS2 found, VIP menu type will follow MenuManager settings."
+            : "MenuManagerCS2 not found, falling back to the native Chat/CenterHtml menu.");
+    }
+
+    internal void ResolveMenuApi()
+    {
         try
         {
             MenuApi = _menuManagerCapability.Get();
@@ -85,9 +94,6 @@ public partial class VipCore : BasePlugin
             MenuApi = null;
         }
 
-        Logger.LogInformation(MenuApi != null
-            ? "PanoramaMenuManagerCS2 found, VIP menu type will follow MenuManager settings."
-            : "MenuManagerCS2 not found, falling back to the native Chat/CenterHtml menu.");
     }
 
     private void LoadConfig()
@@ -494,6 +500,7 @@ public partial class VipCore : BasePlugin
         if (!Users.TryGetValue(player.SteamID, out var user)) return;
 
         var menu = VipApi.CreateMenu(Localizer["menu.Title", user.group]);
+        var panorama = MenuApi?.GetMenuType(player) == MenuManager.MenuType.PanoramaMenu;
         if (Config.Groups.TryGetValue(user.group, out var vipGroup))
         {
             var sortedFeatures = Features.Where(setting => setting.Value.FeatureType is not FeatureType.Hide)
@@ -506,56 +513,52 @@ public partial class VipCore : BasePlugin
                 if (string.IsNullOrEmpty(featureValue.ToString())) continue;
                 if (!user.FeatureState.TryGetValue(key, out var featureState)) continue;
 
-                var value = string.Empty;
-                if (feature.FeatureType is FeatureType.Toggle)
+                var featureType = feature.FeatureType;
+                var disabled = featureState == FeatureState.NoAccess || ForcedDisabledFeatures.Contains(key);
+                void SelectFeature(CCSPlayerController controller, CounterStrikeSharp.API.Modules.Menu.ChatMenuOption _)
                 {
-                    value = featureState switch
+                    if (!user.FeatureState.TryGetValue(key, out var currentState)) return;
+                    var result = VipApi.PlayerUseFeature(controller, key, currentState, featureType);
+
+                    if (result == HookResult.Handled || result == HookResult.Stop)
                     {
-                        FeatureState.Enabled => $"{Localizer["chat.Enabled"]}",
-                        FeatureState.Disabled => $"{Localizer["chat.Disabled"]}",
-                        FeatureState.NoAccess => $"{Localizer["chat.NoAccess"]}",
-                        _ => throw new ArgumentOutOfRangeException()
-                    };
+                        CreateMenu(controller);
+                        return;
+                    }
+
+                    var nextState = featureType == FeatureType.Toggle
+                        ? currentState == FeatureState.Enabled ? FeatureState.Disabled : FeatureState.Enabled
+                        : currentState;
+                    user.FeatureState[key] = nextState;
+                    feature.OnSelectItem?.Invoke(controller, nextState);
+
+                    if (featureType == FeatureType.Toggle)
+                    {
+                        var stateText = nextState == FeatureState.Enabled ? Localizer["chat.Enabled"] : Localizer["chat.Disabled"];
+                        if (panorama && MenuApi != null)
+                            MenuApi.Notify(controller, Localizer[key], stateText,
+                                nextState == FeatureState.Enabled ? MenuNotice.Success : MenuNotice.Warning);
+                        else
+                            VipApi.PrintToChat(controller, $"{Localizer[key]}: {stateText}");
+
+                        CreateMenu(controller);
+                    }
                 }
 
-                var featureType = feature.FeatureType;
-
-                menu.AddMenuOption(
-                    Localizer[key] + (featureType == FeatureType.Selectable
-                        ? string.Empty
-                        : $" [{value}]"),
-                    (controller, _) =>
-                    {
-                        var result = VipApi.PlayerUseFeature(player, key, featureState, featureType);
-
-                        if (result == HookResult.Handled || result == HookResult.Stop)
-                        {
-                            CreateMenu(player);
-                            return;
-                        }
-
-                        var returnState = featureState;
-                        if (featureType != FeatureType.Selectable)
-                        {
-                            returnState = featureState switch
-                            {
-                                FeatureState.Enabled => FeatureState.Disabled,
-                                FeatureState.Disabled => FeatureState.Enabled,
-                                _ => returnState
-                            };
-
-                            VipApi.PrintToChat(player,
-                                $"{Localizer[key]}: {(returnState == FeatureState.Enabled ? $"{Localizer["chat.Enabled"]}" : $"{Localizer["chat.Disabled"]}")}");
-                        }
-
-                        user.FeatureState[key] = returnState;
-                        feature.OnSelectItem?.Invoke(controller, returnState);
-
-                        if (CoreConfig.ReOpenMenuAfterItemClick && featureType != FeatureType.Selectable)
-                        {
-                            CreateMenu(controller);
-                        }
-                    }, featureState == FeatureState.NoAccess || ForcedDisabledFeatures.Contains(key));
+                if (featureType == FeatureType.Toggle && MenuApi != null)
+                {
+                    var label = Localizer[key].ToString();
+                    if (!panorama)
+                        label += $": {(featureState == FeatureState.Enabled ? Localizer["chat.Enabled"] : Localizer["chat.Disabled"])}";
+                    MenuApi.AddToggle(menu, label, featureState == FeatureState.Enabled, SelectFeature, disabled);
+                }
+                else
+                {
+                    var label = featureType == FeatureType.Toggle
+                        ? $"{Localizer[key]}: {(featureState == FeatureState.Enabled ? Localizer["chat.Enabled"] : Localizer["chat.Disabled"])}"
+                        : Localizer[key].ToString();
+                    menu.AddMenuOption(label, SelectFeature, disabled);
+                }
             }
         }
 

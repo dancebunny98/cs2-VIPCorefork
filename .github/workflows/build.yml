@@ -133,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p VIPCore/build-deps
-          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n1)
+          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | contains("cssharp") and endswith(".zip")) | .browser_download_url' | head -n1)
           curl -fsSL "$mm_url" -o /tmp/menumanager.zip
           unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d VIPCore/build-deps
       - name: Restore & build
@@ -156,8 +156,7 @@ jobs:
           if-no-files-found: error
 
   # ------------------------------------------------------------------
-  # 3) Копирование MenuManagerApi.dll в shared/ (если есть)
-  #    Файл ищется в RequirmentsApi/ или корне
+  # 3) Публикация контракта MenuManagerApi.dll в shared/
   # ------------------------------------------------------------------
   copy-menumanagerapi:
     name: Copy MenuManagerApi to shared
@@ -165,26 +164,19 @@ jobs:
     needs: prepare
     steps:
       - uses: actions/checkout@v5
-      - name: Copy MenuManagerApi.dll
+      - name: Download MenuManagerApi.dll
         run: |
-          found=""
-          for loc in "./MenuManagerApi.dll" "./RequirmentsApi/MenuManagerApi.dll" "./VIPCore/MenuManagerApi.dll"; do
-            if [ -f "$loc" ]; then
-              mkdir -p "out/addons/counterstrikesharp/shared/MenuManagerApi"
-              cp "$loc" "out/addons/counterstrikesharp/shared/MenuManagerApi/"
-              echo "MenuManagerApi.dll copied from $loc"
-              found="yes"
-              break
-            fi
-          done
-          if [ -z "$found" ]; then
-            echo "::warning::MenuManagerApi.dll not found, skipping (module menus may fallback to chat)"
-          fi
+          set -euo pipefail
+          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | contains("cssharp") and endswith(".zip")) | .browser_download_url' | head -n1)
+          test -n "$mm_url"
+          curl -fsSL "$mm_url" -o /tmp/menumanager.zip
+          mkdir -p out/addons/counterstrikesharp/shared/MenuManagerApi
+          unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d out/addons/counterstrikesharp/shared/MenuManagerApi
       - uses: actions/upload-artifact@v6
         with:
           name: MenuManagerApi
           path: out/
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ------------------------------------------------------------------
   # 4) Сборка VIPCore (ядро)
@@ -201,7 +193,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p VIPCore/build-deps
-          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n1)
+          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | contains("cssharp") and endswith(".zip")) | .browser_download_url' | head -n1)
           curl -fsSL "$mm_url" -o /tmp/menumanager.zip
           unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d VIPCore/build-deps
       - uses: actions/setup-dotnet@v6
@@ -258,7 +250,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p VIPCore/build-deps
-          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n1)
+          mm_url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" -H "User-Agent: github-actions" https://api.github.com/repos/RRimmer/PanoramaMenuManagerCS2/releases/latest | jq -r '.assets[] | select(.name | contains("cssharp") and endswith(".zip")) | .browser_download_url' | head -n1)
           curl -fsSL "$mm_url" -o /tmp/menumanager.zip
           unzip -j -o /tmp/menumanager.zip '*/counterstrikesharp/shared/MenuManagerApi/MenuManagerApi.dll' -d VIPCore/build-deps
       - uses: actions/setup-dotnet@v6

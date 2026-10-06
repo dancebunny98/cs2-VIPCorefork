@@ -8,6 +8,7 @@ using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.Utils;
+using MenuManager;
 using VipCoreApi;
 using static VipCoreApi.IVipCoreApi;
 
@@ -49,6 +50,7 @@ public class Tag : VipFeatureBase
     public override string Feature => "Tag";
 
     private readonly UserSettings?[] _userSettings = new UserSettings?[70];
+    private static readonly PluginCapability<IMenuApi?> MenuCapability = new("menu:nfcore");
 
     public Tag(VIPTag vipTag, IVipCoreApi api) : base(api)
     {
@@ -155,6 +157,25 @@ public class Tag : VipFeatureBase
         // Goes through Api.CreateMenu so it respects PanoramaMenuManager settings,
         // instead of always forcing the native chat (!1 !2 !3) menu.
         var menu = CreateMenu(GetTranslatedText(Feature));
+        IMenuApi? menuApi;
+        try { menuApi = MenuCapability.Get(); }
+        catch { menuApi = null; }
+
+        if (userTag.Count > 0 && menuApi?.GetMenuType(player) == MenuManager.MenuType.PanoramaMenu)
+        {
+            var choices = userTag.ToArray();
+            var current = _userSettings[player.Slot]!.Tag;
+            menu.PostSelectAction = PostSelectAction.Nothing;
+            menuApi.AddSelect(menu, GetTranslatedText(Feature), current, choices, (controller, _, index) =>
+            {
+                _userSettings[controller.Slot]!.Tag = choices[index];
+                ChangeTag(controller);
+                menuApi.Notify(controller, GetTranslatedText(Feature), choices[index]);
+                OnSelectItem(controller, state);
+            });
+            menu.Open(player);
+            return;
+        }
 
         menu.AddMenuOption(GetTranslatedText("tag.Disable"), (controller, option) =>
         {
@@ -207,7 +228,9 @@ public class Tag : VipFeatureBase
     {
         if (_userSettings[player.Slot] == null || !PlayerHasFeature(player)) return;
 
-        _userSettings[player.Slot]!.Tag = GetDefaultTag(player);
+        var tags = GetFeatureValue<List<string>>(player);
+        if (!tags.Contains(_userSettings[player.Slot]!.Tag))
+            _userSettings[player.Slot]!.Tag = GetDefaultTag(player);
     }
 
     public override void OnPlayerSpawn(CCSPlayerController player)

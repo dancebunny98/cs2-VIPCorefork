@@ -399,6 +399,8 @@ public class VipCoreApi : IVipCoreApi
     public IMenu CreateMenu(string title)
     {
         // MenuManagerCore owns the menu type and player preference.
+        if (_vipCore.MenuApi == null)
+            _vipCore.ResolveMenuApi();
         if (_vipCore.MenuApi != null)
         {
             // Let MenuManagerCore apply DefaultMenu and the player's saved choice.

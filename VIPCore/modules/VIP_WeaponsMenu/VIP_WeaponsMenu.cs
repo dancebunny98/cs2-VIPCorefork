@@ -107,7 +107,7 @@ public class WeaponsMenu : VipFeatureBase
         if (!IsClientVip(player) || !PlayerHasFeature(player) || GetPlayerFeatureState(player) is not FeatureState.Enabled)
             return HookResult.Continue;
 
-        MenuManager.CloseActiveMenu(player);
+        Api.CloseMenu(player);
         Server.NextFrame(() => _weaponsMenu.AddTimer(1.0f, () => CreateMenu(player)));
 
         return HookResult.Continue;
@@ -156,11 +156,8 @@ public class WeaponsMenu : VipFeatureBase
 
         if (weaponsSettings == null) return;
 
-        var menu = new ChatMenu(GetTranslatedText("weaponsmenu.title"))
-        {
-            ExitButton = true,
-            //PostSelectAction = PostSelectAction.Close
-        };
+        var menu = CreateMenu(GetTranslatedText("weaponsmenu.title"));
+        menu.ExitButton = true;
 
         foreach (var package in player.Team == CsTeam.Terrorist ? weaponsSettings.T : weaponsSettings.CT)
         {
@@ -202,10 +199,8 @@ public class WeaponsMenu : VipFeatureBase
 
     private void CreateSubMenu(CCSPlayerController player, WeaponSelection selection)
     {
-        var menu = new ChatMenu(GetTranslatedText("weaponsmenu.wanttosave"))
-        {
-            PostSelectAction = PostSelectAction.Close
-        };
+        var menu = CreateMenu(GetTranslatedText("weaponsmenu.wanttosave"));
+        menu.PostSelectAction = PostSelectAction.Close;
 
         menu.AddMenuOption(GetTranslatedText("weaponsmenu.wanttosave.yes"), (_, _) =>
         {

@@ -1,6 +1,7 @@
 bin/
 obj/
 dist/
+build-deps/
 out/
 .vs/
 .idea/

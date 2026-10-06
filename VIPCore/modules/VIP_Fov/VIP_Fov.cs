@@ -2,6 +2,7 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Menu;
+using MenuManager;
 using VipCoreApi;
 using static VipCoreApi.IVipCoreApi;
 
@@ -37,6 +38,7 @@ public class Fov : VipFeatureBase
 {
     public override string Feature => "Fov";
     private readonly int[] _fovSettings = new int[67];
+    private static readonly PluginCapability<IMenuApi?> MenuCapability = new("menu:nfcore");
 
     public Fov(BasePlugin vipFov, IVipCoreApi api) : base(api)
     {
@@ -65,6 +67,29 @@ public class Fov : VipFeatureBase
         var userFov = GetFeatureValue<List<int>>(player);
 
         var menu = CreateMenu(GetTranslatedText(Feature));
+        IMenuApi? menuApi;
+        try { menuApi = MenuCapability.Get(); }
+        catch { menuApi = null; }
+
+        if (menuApi?.GetMenuType(player) == MenuManager.MenuType.PanoramaMenu)
+        {
+            var choices = new[] { GetTranslatedText("fov.Disable") }
+                .Concat(userFov.Select(value => value.ToString())).ToArray();
+            var current = _fovSettings[player.Slot] == 90
+                ? choices[0]
+                : _fovSettings[player.Slot].ToString();
+            menu.PostSelectAction = PostSelectAction.Nothing;
+            menuApi.AddSelect(menu, GetTranslatedText(Feature), current, choices, (controller, _, index) =>
+            {
+                _fovSettings[controller.Slot] = index == 0 ? 90 : userFov[index - 1];
+                ChangeFov(controller);
+                menuApi.Notify(controller, GetTranslatedText(Feature), choices[index]);
+                OnSelectItem(controller, state);
+            });
+            menu.Open(player);
+            return;
+        }
+
         menu.AddMenuOption(GetTranslatedText("fov.Disable"), (controller, option) =>
         {
             _fovSettings[player.Slot] = 90;

@@ -27,10 +27,9 @@ No `.csproj`, `.cs` or workflow file needs to be touched when bumping anything. 
 GitHub Actions reads `Versions.props`, discovers modules automatically (any `VIPCore/modules/<Name>/<Name>.csproj` with `.cs` files) and publishes the final artifact as **`VIPCore-v<PluginVersion>-build<run_number>`** (with a `VERSION.txt` inside). Local build with a custom number: `dotnet build -c Release -p:BuildNumber=123`.
 
 ## Installation
-1. Install [CounterStrike Sharp](https://github.com/roflmuffin/CounterStrikeSharp), [Metamod:Source](https://www.sourcemm.net/downloads.php/?branch=master)
-and fix WASD menu [MenuManagerCS2Firk](https://github.com/Stimayk/MenuManagerCS2/releases)
-3. Download [VIPCore](https://github.com/dancebunny98/cs2-VIPCorefork/releases) or Beta and Fix [Auto build](https://github.com/dancebunny98/cs2-VIPCorefork/actions)
-4. Unpack the archive and upload it to the game server **(example path: `addons/counterstrikesharp/plugins`)**
+1. Install [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp) and [Metamod:Source](https://www.sourcemm.net/downloads.php/?branch=master).
+2. Install the latest [RRimmer PanoramaMenuManagerCS2](https://github.com/RRimmer/PanoramaMenuManagerCS2/releases). Keep one `MenuManagerApi.dll` in `addons/counterstrikesharp/shared/MenuManagerApi/` and remove copies from plugin folders.
+3. Download [VIPCore](https://github.com/dancebunny98/cs2-VIPCorefork/releases) or the latest [Actions artifact](https://github.com/dancebunny98/cs2-VIPCorefork/actions), then unpack its `addons/` directory into the game server. Restart the server after replacing MenuManagerApi.dll.
 
 ### Put the modules in this path `addons/counterstrikesharp/plugins`
 

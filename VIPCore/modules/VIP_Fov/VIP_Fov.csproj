@@ -5,6 +5,10 @@
 
   <ItemGroup>
     <PackageReference Include="CounterStrikeSharp.API" />
+    <Reference Include="MenuManagerApi">
+      <HintPath>$(MenuManagerApiPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\VipCoreApi\VipCoreApi.csproj">
