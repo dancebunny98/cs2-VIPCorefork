@@ -92,14 +92,22 @@ public class Tag : VipFeatureBase
             return HookResult.Continue;
 
         var isModerator = HasModeratorFlag(player);
-        if (!isModerator && (!PlayerHasFeature(player) || _userSettings[player.Slot] == null))
+        if (!isModerator && !PlayerHasFeature(player))
             return HookResult.Continue;
 
-        var tag = isModerator ? "MOD" : _userSettings[player.Slot]!.Tag;
+        // The chat event can arrive before OnPlayerLoaded has populated the
+        // per-slot state (for example after a hot reload). Resolve the default
+        // tag from the current VIP group instead of dropping the chat message.
+        var tag = isModerator
+            ? "MOD"
+            : _userSettings[player.Slot]?.Tag is { } selected && !string.IsNullOrWhiteSpace(selected) && selected != "\0"
+                ? selected
+                : GetDefaultTag(player);
         if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
             return HookResult.Continue;
 
         var message = $"{ChatColors.Grey}[{tag}] {ChatColors.Default}{player.PlayerName}: {@event.Text}";
+        info.DontBroadcast = true;
         foreach (var recipient in Utilities.GetPlayers())
         {
             if (!recipient.IsValid || recipient.IsBot ||
