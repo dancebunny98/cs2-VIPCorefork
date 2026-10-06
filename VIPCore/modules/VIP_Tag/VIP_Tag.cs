@@ -127,13 +127,7 @@ public class Tag : VipFeatureBase
         if (string.IsNullOrWhiteSpace(tag) || tag == "\0")
             return HookResult.Continue;
 
-        var nameColor = player.TeamNum switch
-        {
-            2 => ChatColors.Yellow,
-            3 => ChatColors.LightBlue,
-            _ => ChatColors.Grey
-        };
-        message.SetString("param1", $"{ChatColors.Grey}[{tag}] {nameColor}{message.ReadString("param1")}");
+        message.SetString("param1", $"[{tag}] {message.ReadString("param1")}");
         return HookResult.Continue;
     }
 
