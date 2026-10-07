@@ -523,7 +523,8 @@ public partial class VipCore : BasePlugin
 
                     if (result == HookResult.Handled || result == HookResult.Stop)
                     {
-                        CreateMenu(controller);
+                        if (!panorama)
+                            CreateMenu(controller);
                         return;
                     }
 
@@ -542,7 +543,8 @@ public partial class VipCore : BasePlugin
                         else
                             VipApi.PrintToChat(controller, $"{Localizer[key]}: {stateText}");
 
-                        CreateMenu(controller);
+                        if (!panorama)
+                            CreateMenu(controller);
                     }
                 }
 
@@ -562,7 +564,6 @@ public partial class VipCore : BasePlugin
                         (controller, _, index) =>
                         {
                             handler.SelectPanoramaChoice(controller, index);
-                            CreateMenu(controller);
                         }, disabled);
                 }
                 else

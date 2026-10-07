@@ -224,6 +224,7 @@ jobs:
             mkdir -p "$PLUGIN_OUT/lang"
             cp VIPCore/VIPCore/lang/*.json "$PLUGIN_OUT/lang"/ 2>/dev/null || true
           fi
+          cp README.md "$PLUGIN_OUT/README.md"
           find out -type f
       - uses: actions/upload-artifact@v6
         with:
@@ -293,6 +294,9 @@ jobs:
           if [ -d "$PROJDIR/lang" ]; then
             mkdir -p "$OUT/lang"
             cp "$PROJDIR"/lang/*.json "$OUT/lang"/ 2>/dev/null || true
+          fi
+          if [ -f "$PROJDIR/README.md" ]; then
+            cp "$PROJDIR/README.md" "$OUT/README.md"
           fi
           find out -type f
       - name: Report failure
